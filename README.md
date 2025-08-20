@@ -1,7 +1,3 @@
-# Senior-Level Chat Application
-
-A production-ready chat application built with FastAPI, LangGraph, and PostgreSQL, featuring a clean, senior-level architecture with proper separation of concerns.
-
 
 ## Features
 
