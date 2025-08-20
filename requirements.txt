@@ -1,3 +1,53 @@
-"psycopg[binary,pool]"
-langgraph
-langgraph-checkpoint-postgres
+# Core FastAPI and ASGI
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+asyncpg==0.29.0
+"psycopg[binary,pool]"==3.1.12
+alembic==1.12.1
+
+# LangChain and AI
+langchain==0.1.0
+langchain-openai==0.0.2
+langgraph==0.0.62
+langgraph-checkpoint-postgres==0.0.1
+langchain-core==0.1.0
+openai==1.3.7
+
+# Configuration
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Logging and utilities
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+httpx==0.25.2
+
+# Code quality
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+
+# Optional for monitoring
+prometheus-client==0.19.0
+
+# WebSocket support
+websockets==12.0
+
+# Time handling
+python-dateutil==2.8.2
+
+# UUID handling
+uuid==1.30
+
+# JSON handling
+orjson==3.9.10
