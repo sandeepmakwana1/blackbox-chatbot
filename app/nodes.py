@@ -2,7 +2,7 @@ from langchain_core.messages import (
     BaseMessage, HumanMessage, AIMessage, SystemMessage, trim_messages
 )
 from app.schema import ConversationState
-from app.config import SUMMARY_TRIGGER_COUNT, MAX_TOKENS_FOR_SUMMARY
+from app.config import SUMMARY_TRIGGER_COUNT, MAX_TOKENS_FOR_SUMMARY, TOOLS
 from app.summary_agent import summarize_history
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM, SUMMARY_TRIGGER_COUNT
 from langchain_core.messages import (
@@ -58,6 +58,12 @@ async def chat_node(state: ConversationState):
     prompt_template = ChatPromptTemplate.from_messages(
     [system_prompt, user_prompt])
     model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
+    
+    # Check conversation type for web search functionality
+    conversation_type = state.get("conversation_type")
+    if conversation_type == "web":
+        model_chat = model_chat.bind_tools([TOOLS["web_search_preview"]])
+    
     trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(base)
     msgs = prompt_template.format_messages(
         language=language,

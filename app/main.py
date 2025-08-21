@@ -4,7 +4,7 @@ from starlette.websockets import WebSocketDisconnect
 
 import json
 from datetime import datetime
-from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER
+from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER, serialize_content_to_string
 from app.chat_manager import ChatManager
 from pydantic import BaseModel
 from typing import Optional
@@ -108,7 +108,11 @@ async def get_conversation_state(user_id: str, thread_id: str):
                 role = "human"
             elif isinstance(m, SystemMessage):
                 role = "system"
-            msgs.append({"role": role, "content": getattr(m, "content", "")})
+            
+            # Use centralized content serialization
+            content = getattr(m, "content", "")
+            content = serialize_content_to_string(content)
+            msgs.append({"role": role, "content": content})
 
         return {
             "messages": msgs,

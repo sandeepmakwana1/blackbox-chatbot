@@ -1,8 +1,9 @@
-__all__ = ['ChatService', 'ConversationState', 'HumanMessage', 'SystemMessage', 'AIMessage', 'LOGGER']
+__all__ = ['ChatService', 'ConversationState', 'HumanMessage', 'SystemMessage', 'AIMessage', 'LOGGER', 'serialize_content_to_string']
 
 import os
 import logging
 import asyncio
+import json
 from datetime import datetime
 from typing import List, Dict, Optional, Sequence, Annotated, Any
 
@@ -20,7 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from app.prompt import PlaygroundChatPrompt
 from app.schema import ConversationState
-from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT
+from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT, TOOLS
 from app.helper import get_trimmer_object, update_token_tracking
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
@@ -51,6 +52,7 @@ class ChatService:
         # LLMs
         self.model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
         self.model_summarize = ChatOpenAI(model=DEFAULT_MODELS["summarize"], temperature=0.2)
+        self.web_search_model_chat = self.model_chat.bind(tools=TOOLS)
 
         # Embeddings
         self.embeddings = OpenAIEmbeddings(model=DEFAULT_MODELS["embed"])
@@ -184,7 +186,6 @@ class ChatService:
             Streaming chunks of the response
         """
         await self._validate_connection()
-        # Validate connection before processing
         config = {"configurable": {"thread_id": thread_id}}
         
         # Get existing state to preserve token tracking
@@ -204,20 +205,19 @@ class ChatService:
             "tokens": existing_tokens,
         }
 
-        # Send initial response chunk
         yield {"type": "start", "content": ""}
 
-        # Process message with streaming using astream with stream_mode="messages"
         full_response = ""
         try:
             async for chunk, _meta in self.app.astream(initial_state, config, stream_mode="messages"):
-                # Some langgraph versions yield AIMessage, others dict-like chunks
                 content = getattr(chunk, "content", None)
-                if content:
-                    full_response += content
-                    yield {"type": "chunk", "content": content}
+                if content is not None:
+                    content_str = serialize_content_to_string(content)
+                    
+                    if content_str.strip():
+                        full_response += content_str
+                        yield {"type": "chunk", "content": content_str}
 
-            # Get final state for token tracking
             final_state = await self.app.aget_state(config)
             token_usage = final_state.values.get("tokens", {})
 
@@ -232,3 +232,37 @@ class ChatService:
         except Exception as e:
             LOGGER.exception("Streaming error")
             yield {"type": "error", "message": str(e)}
+
+
+def serialize_content_to_string(content: Any) -> str:
+    """
+    Convert various content formats (string, list, dict) into a clean string representation.
+    
+    Args:
+        content: Content to serialize (can be string, list, dict, or other)
+        
+    Returns:
+        Clean string representation of the content
+    """
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        # Handle list of strings or dictionaries
+        text_parts = []
+        for item in content:
+            if isinstance(item, str):
+                text_parts.append(item)
+            elif isinstance(item, dict):
+                # Handle dict with 'text' or 'content' key
+                text = item.get('text', item.get('content', ''))
+                if text:
+                    text_parts.append(str(text))
+            else:
+                text_parts.append(str(item))
+        return ''.join(text_parts)
+    elif isinstance(content, dict):
+        # Handle dictionary content
+        text = content.get('text', content.get('content', ''))
+        return str(text) if text else str(content)
+    else:
+        return str(content)

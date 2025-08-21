@@ -12,6 +12,10 @@ DEFAULT_MODELS = {
 }
 # Token tracking only - no pricing needed
 
+
+TOOLS = {
+    "web_search_preview": {"type": "web_search_preview"}
+    }
 MAX_TOKENS_FOR_TRIM = int(os.getenv("MAX_TOKENS_FOR_TRIM", "4000"))
 SUMMARY_TRIGGER_COUNT = int(os.getenv("SUMMARY_TRIGGER_COUNT", "10"))
 MAX_TOKENS_FOR_SUMMARY = 10000
