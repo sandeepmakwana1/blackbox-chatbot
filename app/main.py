@@ -99,6 +99,7 @@ async def get_conversation_state(user_id: str, thread_id: str):
     """Return the stored state for a given conversation thread."""
     try:
         config = {"configurable": {"thread_id": thread_id}}
+        await service._validate_connection()
         state = await service.app.aget_state(config)
         msgs = []
         for m in state.values.get("messages", []):
