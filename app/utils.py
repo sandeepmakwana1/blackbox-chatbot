@@ -21,7 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from app.prompt import PlaygroundChatPrompt
 from app.schema import ConversationState
-from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT, TOOLS
+from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT, TOOLS, POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_DB
 from app.helper import get_trimmer_object, update_token_tracking
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
@@ -46,7 +46,7 @@ class ChatService:
       - conversation
     """
 
-    def __init__(self, db_uri: str = "postgresql://myuser:mypassword@localhost:5432/mydatabase?sslmode=disable"):
+    def __init__(self, db_uri: str = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}?sslmode=require"):
         """Initialize ChatService with PostgreSQL persistence."""
         self.db_uri = db_uri
         # LLMs

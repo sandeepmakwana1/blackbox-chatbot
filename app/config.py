@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
@@ -19,6 +21,13 @@ TOOLS = {
 MAX_TOKENS_FOR_TRIM = int(os.getenv("MAX_TOKENS_FOR_TRIM", "4000"))
 SUMMARY_TRIGGER_COUNT = int(os.getenv("SUMMARY_TRIGGER_COUNT", "10"))
 MAX_TOKENS_FOR_SUMMARY = 10000
+
+
+POSTGRES_DB=os.getenv("POSTGRES_DB")
+POSTGRES_USER=os.getenv("POSTGRES_USER")
+POSTGRES_PASSWORD=os.getenv("POSTGRES_PASSWORD")
+POSTGRES_HOST=os.getenv("POSTGRES_HOST")
+POSTGRES_PORT=os.getenv("POSTGRES_PORT")
 
 
 
