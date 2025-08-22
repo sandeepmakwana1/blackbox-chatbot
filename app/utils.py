@@ -1,4 +1,4 @@
-__all__ = ['ChatService', 'ConversationState', 'HumanMessage', 'SystemMessage', 'AIMessage', 'LOGGER', 'serialize_content_to_string']
+__all__ = ['ChatService', 'ConversationState', 'HumanMessage', 'SystemMessage', 'AIMessage', 'LOGGER']
 
 import os
 import logging
@@ -22,7 +22,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from app.prompt import PlaygroundChatPrompt
 from app.schema import ConversationState
 from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT, TOOLS, POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,POSTGRES_DB
-from app.helper import get_trimmer_object, update_token_tracking
+from app.helper import get_trimmer_object, update_token_tracking, serialize_content_to_string
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
 
@@ -46,9 +46,17 @@ class ChatService:
       - conversation
     """
 
-    def __init__(self, db_uri: str = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}?sslmode=require"):
+    def __init__(self, db_uri: str = None):
         """Initialize ChatService with PostgreSQL persistence."""
-        self.db_uri = db_uri
+        # Build DB URI with better SSL handling
+        if db_uri is None:
+            # Check if we're in a local development environment
+            is_local = POSTGRES_HOST in ['localhost', '127.0.0.1', 'postgres']
+            ssl_mode = 'disable' if is_local else 'require'
+            self.db_uri = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}?sslmode={ssl_mode}"
+        else:
+            self.db_uri = db_uri
+            
         # LLMs
         self.model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
         self.model_summarize = ChatOpenAI(model=DEFAULT_MODELS["summarize"], temperature=0.2)
@@ -61,29 +69,52 @@ class ChatService:
         self.app = None
         self.checkpointer = None
         self._checkpointer_cm = None
+        self._is_initialized = False
+        self._initialization_lock = asyncio.Lock()
 
 
     # -------------------------- Conversation graph ---------------------------
 
     async def initialize(self):
-        """Initialize the graph with PostgreSQL persistence."""
-        # Clean up existing checkpointer if any
-        await self._cleanup_checkpointer()
-        
-        # Create new checkpointer
-        self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(self.db_uri)
-        self.checkpointer = await self._checkpointer_cm.__aenter__()
-        await self.checkpointer.setup()
-        
-        # Build graph using existing nodes
-        graph = StateGraph(state_schema=ConversationState)
-        graph.add_node("summarize", summarize_node)
-        graph.add_node("chat", chat_node)
-        
-        graph.add_conditional_edges(START, route_summarize, {"summarize": "summarize", "chat": "chat"})
-        graph.add_edge("summarize", "chat")
-        
-        self.app = graph.compile(checkpointer=self.checkpointer)
+        """Initialize the graph with PostgreSQL persistence with proper error handling."""
+        async with self._initialization_lock:
+            if self._is_initialized:
+                return
+                
+            try:
+                # Clean up existing checkpointer if any
+                await self._cleanup_checkpointer()
+                
+                # Create new checkpointer with retry logic
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(self.db_uri)
+                        self.checkpointer = await self._checkpointer_cm.__aenter__()
+                        await self.checkpointer.setup()
+                        break
+                    except Exception as e:
+                        LOGGER.warning(f"Database connection attempt {attempt + 1}/{max_retries} failed: {e}")
+                        if attempt == max_retries - 1:
+                            raise
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                
+                # Build graph using existing nodes
+                graph = StateGraph(state_schema=ConversationState)
+                graph.add_node("summarize", summarize_node)
+                graph.add_node("chat", chat_node)
+                
+                graph.add_conditional_edges(START, route_summarize, {"summarize": "summarize", "chat": "chat"})
+                graph.add_edge("summarize", "chat")
+                
+                self.app = graph.compile(checkpointer=self.checkpointer)
+                self._is_initialized = True
+                LOGGER.info("ChatService initialized successfully")
+                
+            except Exception as e:
+                LOGGER.error(f"Failed to initialize ChatService: {e}")
+                await self._cleanup_checkpointer()
+                raise
     
     async def _cleanup_checkpointer(self):
         """Clean up existing checkpointer to prevent connection leaks."""
@@ -232,37 +263,3 @@ class ChatService:
         except Exception as e:
             LOGGER.exception("Streaming error")
             yield {"type": "error", "message": str(e)}
-
-
-def serialize_content_to_string(content: Any) -> str:
-    """
-    Convert various content formats (string, list, dict) into a clean string representation.
-    
-    Args:
-        content: Content to serialize (can be string, list, dict, or other)
-        
-    Returns:
-        Clean string representation of the content
-    """
-    if isinstance(content, str):
-        return content
-    elif isinstance(content, list):
-        # Handle list of strings or dictionaries
-        text_parts = []
-        for item in content:
-            if isinstance(item, str):
-                text_parts.append(item)
-            elif isinstance(item, dict):
-                # Handle dict with 'text' or 'content' key
-                text = item.get('text', item.get('content', ''))
-                if text:
-                    text_parts.append(str(text))
-            else:
-                text_parts.append(str(item))
-        return ''.join(text_parts)
-    elif isinstance(content, dict):
-        # Handle dictionary content
-        text = content.get('text', content.get('content', ''))
-        return str(text) if text else str(content)
-    else:
-        return str(content)

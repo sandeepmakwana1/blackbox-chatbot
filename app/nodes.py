@@ -1,3 +1,5 @@
+import logging
+from datetime import datetime
 from langchain_core.messages import (
     BaseMessage, HumanMessage, AIMessage, SystemMessage, trim_messages
 )
@@ -17,6 +19,8 @@ from app.prompt import PlaygroundChatPrompt
 from app.helper import get_trimmer_object , update_token_tracking
 from langchain_openai import ChatOpenAI
 
+LOGGER = logging.getLogger("langgraph-nodes")
+
 
 # summary Nodes 
 def route_summarize(state: ConversationState) -> str:
@@ -31,17 +35,30 @@ async def summarize_node(state: ConversationState):
     history = list(state["messages"])
     if len(history) <= 1:
         return {}
+    
     summary_text, usage = await summarize_history(history[:-1], state.get("summary_context",[]))
     summary_note = SystemMessage(content=f"Summary of prior conversation:\n{summary_text}")
-    # working = [summary_note, history[-1]]
-
     
-    # FIX: merge token_tracking instead of overwriting it
-    prior_tt = state.get("tokens", {"total_tokens": 0})
-    prior_tt["current_tokens"] = 0
-    merged_tt = {**prior_tt, "summarization_tokens": (usage or {}).get("total_tokens", 0)}
-
-    return {"summary_context": summary_note, "tokens": merged_tt}
+    # Improved token tracking with consistent format
+    prior_tokens = state.get("tokens", {"total_tokens": 0, "current_tokens": 0})
+    summary_tokens = (usage or {}).get("total_tokens", 0)
+    
+    # Reset current tokens since we're summarizing (trimming history)
+    merged_tokens = {
+        "total_tokens": prior_tokens.get("total_tokens", 0) + summary_tokens,
+        "current_tokens": 0,  # Reset since we're summarizing
+        "last_request_tokens": summary_tokens,
+        "summarization_tokens": summary_tokens,
+        "last_request_breakdown": {
+            "summarization_tokens": summary_tokens,
+            "main_tokens": 0
+        },
+        "model": DEFAULT_MODELS["summarize"],
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    LOGGER.info(f"Summarization completed: {summary_tokens} tokens used, conversation reset")
+    return {"summary_context": summary_note, "tokens": merged_tokens}
 
 
 # chat Nodes
@@ -72,9 +89,8 @@ async def chat_node(state: ConversationState):
     )
     response: AIMessage = await model_chat.ainvoke(msgs)
 
-    addl = state.get("tokens", {}).get("total_tokens", 0)
     token_info = update_token_tracking(
-        state=state, response=response, model_name=DEFAULT_MODELS["chat"], additional_tokens=addl
+        state=state, response=response, model_name=DEFAULT_MODELS["chat"], additional_tokens=0
     )
     return {"messages": [response], "summary_context": state.get("summary_context", []), "tokens": token_info}
 

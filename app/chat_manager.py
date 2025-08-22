@@ -61,12 +61,31 @@ class ChatManager:
             if not all([db_name, db_user, db_password]):
                 raise ValueError("Missing one or more required database environment variables.")
 
-            dsn = f"dbname='{db_name}' user='{db_user}' password='{db_password}' host='{db_host}' port='{db_port}'"
+            # Improved DSN with better connection handling
+            is_local = db_host in ['localhost', '127.0.0.1', 'postgres']
+            ssl_mode = 'disable' if is_local else 'require'
             
-            # Create a connection pool (min_conn=1, max_conn=10)
-            self.pool = SimpleConnectionPool(1, 10, dsn)
-            LOGGER.info("Database connection pool created successfully.")
+            dsn = f"dbname='{db_name}' user='{db_user}' password='{db_password}' host='{db_host}' port='{db_port}' sslmode='{ssl_mode}' connect_timeout=10"
+            
+            # Create a connection pool with better configuration
+            self.pool = SimpleConnectionPool(
+                minconn=2,  # Keep minimum connections alive
+                maxconn=20,  # Allow more connections for high load
+                dsn=dsn
+            )
+            
+            # Pool health monitoring
+            self._pool_stats = {
+                'total_connections': 0,
+                'failed_connections': 0,
+                'last_health_check': datetime.utcnow()
+            }
+            
+            LOGGER.info(f"Database connection pool created successfully (min: 2, max: 20, host: {db_host})")
             self.setup_database()
+            
+            # Initial health check
+            self._perform_health_check()
 
         except (Exception, psycopg2.Error) as error:
             LOGGER.error("Error while connecting to PostgreSQL", exc_info=error)
@@ -96,9 +115,33 @@ class ChatManager:
             LOGGER.error(f"Error setting up database schema: {e}")
             raise
 
+    def _perform_health_check(self) -> bool:
+        """Perform a health check on the connection pool."""
+        try:
+            test_query = "SELECT 1 as health_check"
+            result = self._execute_query(test_query, fetch='one')
+            self._pool_stats['last_health_check'] = datetime.utcnow()
+            
+            if result and result[0] == 1:
+                LOGGER.debug("Database connection pool health check passed")
+                return True
+            return False
+        except Exception as e:
+            LOGGER.warning(f"Database health check failed: {e}")
+            self._pool_stats['failed_connections'] += 1
+            return False
+    
+    def get_pool_stats(self) -> Dict[str, Any]:
+        """Get connection pool statistics."""
+        return {
+            **self._pool_stats,
+            'pool_available': self.pool.minconn if self.pool else 0,
+            'pool_max': self.pool.maxconn if self.pool else 0
+        }
+
     def _execute_query(self, query: str, params: Optional[Tuple] = None, fetch: Optional[str] = None):
         """
-        Executes a query using a connection from the pool.
+        Executes a query using a connection from the pool with retry logic and better error handling.
         
         Args:
             query (str): The SQL query to execute.
@@ -109,28 +152,58 @@ class ChatManager:
             The result of the query execution or row count for modification queries.
         """
         conn = None
-        try:
-            conn = self.pool.getconn()
-            # Use DictCursor to get results as dictionaries
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute(query, params)
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                conn = self.pool.getconn()
+                self._pool_stats['total_connections'] += 1
                 
-                if fetch == 'one':
-                    return cur.fetchone()
-                elif fetch == 'all':
-                    return cur.fetchall()
+                # Use DictCursor to get results as dictionaries
+                with conn.cursor(cursor_factory=DictCursor) as cur:
+                    cur.execute(query, params)
+                    
+                    if fetch == 'one':
+                        return cur.fetchone()
+                    elif fetch == 'all':
+                        return cur.fetchall()
+                    else:
+                        # For INSERT, UPDATE, DELETE, return the number of affected rows
+                        conn.commit()
+                        return cur.rowcount
+                        
+            except psycopg2.OperationalError as e:
+                # Connection-level errors - attempt retry
+                self._pool_stats['failed_connections'] += 1
+                LOGGER.warning(f"Database connection error (attempt {attempt + 1}/{max_retries}): {e}")
+                
+                if conn:
+                    try:
+                        conn.rollback()
+                        self.pool.putconn(conn, close=True)  # Close bad connection
+                    except:
+                        pass
+                    conn = None
+                
+                if attempt == max_retries - 1:
+                    LOGGER.error(f"Failed to execute query after {max_retries} attempts")
+                    raise
                 else:
-                    # For INSERT, UPDATE, DELETE, return the number of affected rows
-                    conn.commit()
-                    return cur.rowcount
-        except (Exception, psycopg2.Error) as error:
-            LOGGER.error("PostgreSQL Error:", exc_info=error)
-            if conn:
-                conn.rollback() # Rollback on error
-            raise
-        finally:
-            if conn:
-                self.pool.putconn(conn) # Always return the connection to the pool
+                    # Brief wait before retry
+                    import time
+                    time.sleep(0.1 * (attempt + 1))  # Exponential backoff
+                    
+            except (Exception, psycopg2.Error) as error:
+                # Other database errors - don't retry
+                self._pool_stats['failed_connections'] += 1
+                LOGGER.error("PostgreSQL Error:", exc_info=error)
+                if conn:
+                    conn.rollback() # Rollback on error
+                raise
+                
+            finally:
+                if conn:
+                    self.pool.putconn(conn) # Always return the connection to the pool
 
     def generate_title_from_message(self, message: str) -> str:
         """Generate a chat title from the first user message."""

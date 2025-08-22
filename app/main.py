@@ -4,7 +4,8 @@ from starlette.websockets import WebSocketDisconnect
 
 import json
 from datetime import datetime
-from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER, serialize_content_to_string
+from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER
+from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
 from pydantic import BaseModel
 from typing import Optional
@@ -77,12 +78,32 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
     except WebSocketDisconnect:
         LOGGER.info("WebSocket disconnected: user=%s", user_id)
-    except Exception as exc:
-        LOGGER.exception("WebSocket error")
+    except json.JSONDecodeError as e:
+        LOGGER.warning(f"Invalid JSON received from user {user_id}: {e}")
         try:
-            await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
+            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON format"}))
+        except:
+            pass
+    except KeyError as e:
+        LOGGER.warning(f"Missing required field in message from user {user_id}: {e}")
+        try:
+            await websocket.send_text(json.dumps({"type": "error", "message": f"Missing required field: {str(e)}"}))
+        except:
+            pass
+    except Exception as exc:
+        LOGGER.exception(f"WebSocket error for user {user_id}")
+        try:
+            # Send a generic error message to avoid exposing internal details
+            error_message = "An internal error occurred. Please try again."
+            await websocket.send_text(json.dumps({"type": "error", "message": error_message}))
+        except:
+            # If we can't send the error message, just log it
+            LOGGER.error(f"Failed to send error message to user {user_id}")
         finally:
-            await websocket.close()
+            try:
+                await websocket.close()
+            except:
+                pass
 
 
 @app.get("/conversation/{user_id}/{thread_id}")
@@ -202,9 +223,42 @@ def get_chat_details(user_id: str, thread_id: str):
         LOGGER.exception("Error getting chat details")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/healthz")
-def healthz():
-    return {"ok": True, "time": datetime.utcnow().isoformat()}
+@app.get("/api/health")
+def health_check():
+    """Comprehensive health check with database connection pool status"""
+    try:
+        # Test database connection
+        pool_health = chat_manager._perform_health_check()
+        pool_stats = chat_manager.get_pool_stats()
+        
+        # Test LangGraph service initialization
+        service_status = "initialized" if service._is_initialized else "not_initialized"
+        
+        health_status = {
+            "status": "healthy" if pool_health else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "services": {
+                "database": {
+                    "status": "healthy" if pool_health else "unhealthy",
+                    "pool_stats": pool_stats
+                },
+                "langgraph": {
+                    "status": service_status,
+                    "db_uri_configured": bool(service.db_uri)
+                }
+            }
+        }
+        
+        status_code = 200 if pool_health else 503
+        return health_status
+        
+    except Exception as e:
+        LOGGER.exception("Health check failed")
+        return {
+            "status": "unhealthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": str(e)
+        }
 
 
 # Local run: uvicorn app:app --reload
