@@ -84,15 +84,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         finally:
             await websocket.close()
 
-    except WebSocketDisconnect:
-        LOGGER.info("WebSocket disconnected: user=%s", user_id)
-    except Exception as exc:
-        LOGGER.exception("WebSocket error")
-        try:
-            await websocket.send_text(json.dumps({"type": "error", "message": str(exc)}))
-        finally:
-            await websocket.close()
-
 
 @app.get("/conversation/{user_id}/{thread_id}")
 async def get_conversation_state(user_id: str, thread_id: str):

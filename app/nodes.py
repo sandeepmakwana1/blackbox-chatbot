@@ -41,7 +41,7 @@ async def summarize_node(state: ConversationState):
     prior_tt["current_tokens"] = 0
     merged_tt = {**prior_tt, "summarization_tokens": (usage or {}).get("total_tokens", 0)}
 
-    return {"summary_context": summary_note, "token": merged_tt}
+    return {"summary_context": summary_note, "tokens": merged_tt}
 
 
 # chat Nodes
