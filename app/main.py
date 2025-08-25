@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import json
 from datetime import datetime
 from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER
+from langchain_core.messages import AIMessage
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
 from app.store import get_record
@@ -134,6 +135,53 @@ client = OpenAI(
 )
 
 
+async def update_conversation_state_from_webhook(thread_id: str, user_id: str, answer: str, status: str):
+    """
+    Update the LangGraph conversation state with the webhook result.
+    
+    Args:
+        thread_id: The conversation thread ID
+        user_id: The user ID  
+        answer: The response text from OpenAI
+        status: Either "completed" or "terminated"
+    """
+    if not thread_id:
+        LOGGER.warning("No thread_id provided for state update, skipping")
+        return
+    
+    try:
+        # Ensure service is initialized and connected
+        await service._validate_connection()
+        
+        # Create config for the thread
+        config = {"configurable": {"thread_id": thread_id}}
+        
+        # Try to get existing state
+        try:
+            existing_state = await service.app.aget_state(config)
+            LOGGER.info(f"Retrieved existing state for thread {thread_id}")
+        except Exception as e:
+            LOGGER.warning(f"Could not retrieve existing state for thread {thread_id}: {e}")
+            # Continue anyway - aupdate_state can handle missing threads
+        
+        # Create assistant message with the result
+        assistant_message = AIMessage(content=answer)
+        
+        # Prepare state patch - messages will be appended due to add_messages annotation
+        patch = {
+            "messages": [assistant_message],
+            "research_status": status
+        }
+        
+        # Update the state
+        await service.app.aupdate_state(config, patch)
+        
+        LOGGER.info(f"Webhook state updated for thread {thread_id}, status={status}")
+        
+    except Exception as e:
+        LOGGER.error(f"Failed to update conversation state for thread {thread_id}: {e}")
+
+
 @app.post("/webhook")
 async def webhook(request: Request, bg: BackgroundTasks):
     """
@@ -159,17 +207,33 @@ async def webhook(request: Request, bg: BackgroundTasks):
             print("start running heavy fetch")
             response = client.responses.retrieve(rid)
             answer = response.output_text
-            metadata = response.metadata
-            thread_id = metadata.get("thread_id", "12345")
-            user_id = metadata.get("user_id", "12345")
+            metadata = response.metadata or {}
+            thread_id = metadata.get("thread_id")
+            user_id = metadata.get("user_id")
+            
+            # Validate required fields
+            if not thread_id:
+                LOGGER.warning("No thread_id found in webhook metadata, skipping state update")
+                return
 
             from app.store import update_record
             import time
+            
+            # Update Redis record
             update_record(thread_id, {
                 "answer": answer,
                 "status": "completed",
                 "end_at": time.time()
             })
+            
+            # Update LangGraph conversation state
+            await update_conversation_state_from_webhook(
+                thread_id=thread_id,
+                user_id=user_id or "unknown",
+                answer=answer,
+                status="completed"
+            )
+            
             print(f"Deep research completed for thread {thread_id}")
         
         bg.add_task(handle)
@@ -179,21 +243,37 @@ async def webhook(request: Request, bg: BackgroundTasks):
         rid = evt.data.id
         print(evt.data, "Failed : evt.data ")
 
-        def handle_terminate():
+        async def handle_terminate():
             response = client.responses.retrieve(rid)
             answer = response.output_text
-            metadata = response.metadata
-            thread_id = metadata.get("thread_id", "12345")
-            user_id = metadata.get("user_id", "12345")
+            metadata = response.metadata or {}
+            thread_id = metadata.get("thread_id")
+            user_id = metadata.get("user_id")
+            
+            # Validate required fields
+            if not thread_id:
+                LOGGER.warning("No thread_id found in terminate webhook metadata, skipping state update")
+                return
 
             from app.store import update_record
             import time
+            
+            # Update Redis record
             update_record(thread_id, {
                 "answer": answer,
                 "status": "terminated",
                 "end_at": time.time()
             })
-            print(f"Deep research completed for thread {thread_id}")
+            
+            # Update LangGraph conversation state
+            await update_conversation_state_from_webhook(
+                thread_id=thread_id,
+                user_id=user_id or "unknown",
+                answer=answer,
+                status="terminated"
+            )
+            
+            print(f"Deep research terminated for thread {thread_id}")
 
         bg.add_task(handle_terminate)
 
@@ -224,6 +304,7 @@ async def get_conversation_state(user_id: str, thread_id: str):
             "messages": msgs,
             "token_tracking": state.values.get("token_tracking", {}),
             "conversation_type": state.values.get("conversation_type", "chat"),
+            "research_status": state.values.get("research_status"),
         }
     except Exception as e:
         LOGGER.exception("Error getting conversation state")
