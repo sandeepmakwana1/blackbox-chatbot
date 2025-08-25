@@ -9,6 +9,9 @@ from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
 from pydantic import BaseModel
 from typing import Optional
+from openai import OpenAI, InvalidWebhookSignatureError
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from langgraph.types import interrupt, Command
 
 class ChatCreateRequest(BaseModel):
     title: Optional[str] = None
@@ -65,14 +68,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 await websocket.send_text(json.dumps(chunk))
             
             # Get current chat state before updating activity
-            chat = chat_manager.get_chat(user_id, thread_id)
-            current_message_count = chat.get('message_count', 0) if chat else 0
-            
+            chat = chat_manager.get_chat(user_id, thread_id)            
             # Update chat activity in metadata after streaming is complete
             chat_manager.update_chat_activity(user_id, thread_id, user_message)
             
             # Auto-rename chat after first message if it has generic title
-            if chat and current_message_count == 0 and chat['title'] in ['New Chat', '']:
+            if chat and chat['title'] in ['New Chat', '', 'string']:
                 new_title = chat_manager.generate_title_from_message(user_message)
                 chat_manager.rename_chat(user_id, thread_id, new_title)
 
@@ -104,6 +105,81 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 await websocket.close()
             except:
                 pass
+
+
+client = OpenAI(
+    webhook_secret="whsec_0hZag1qEAm++5Qr8OqPkJ37a929haN/oeaTo0gFtzkQ=",
+)
+
+
+@app.post("/webhook")
+async def webhook(request: Request, bg: BackgroundTasks):
+    """
+    OpenAI will send a POST request to this endpoint,
+    which will store the deep-research data in Redis.
+    """
+    # logger.info("webhook triggered at %s", time.time())
+    body = await request.body()
+    headers = request.headers
+
+    try:
+        evt = client.webhooks.unwrap(body, headers)
+    except InvalidWebhookSignatureError:
+        # logger.error("invalid signature")
+        raise HTTPException(400, "invalid signature")
+
+    if evt.type == "response.completed":
+        rid = evt.data.id
+
+
+        # run heavy fetch in the background
+        async def handle():
+            print("start running heavy fetch")
+            response = client.responses.retrieve(rid)
+            answer = response.output_text
+            metadata = response.metadata
+            thread_id = metadata.get("thread_id", "12345")
+            user_id = metadata.get("user_id", "12345")
+
+
+            from app.store import update_record
+            update_record(thread_id, {"answer": answer})
+            print("completed running heavy fetch")
+        
+        bg.add_task(handle)
+
+    else:
+    
+        rid = evt.data.id
+        print(evt.data, "Failed : evt.data ")
+
+        # def handle_terminate():
+        #     print("start running terminate")
+        #     response = client.responses.retrieve(rid)
+        #     metadata = response.metadata
+        #     source_id = metadata.get("source_id", "12345")
+        #     print("source_id: =====>>>", source_id)
+
+        #     key = RedisService.get_redis_key(source_id, "deep_research")
+        #     redis_data = json.loads(RedisService.get(key))
+        #     mapping = redis_data.get(str(rid))
+        #     if mapping:
+        #         mapping["status"] = "terminated"
+        #         try:
+        #             mapping["answer"] = response.output_text or response.error
+        #         except:
+        #             mapping[
+        #                 "answer"
+        #             ] = "Time-out from OpenAI response. Don't worry — we will try again in the background, and you can proceed with content generation."
+
+        #         mapping["terminated_at"] = int(time.time())
+        #         redis_data[str(rid)] = mapping
+        #         RedisService.create(key, json.dumps(redis_data))
+        #     print("completed running terminate")
+
+        # bg.add_task(handle_terminate)
+
+    return {}  # 200
 
 
 @app.get("/conversation/{user_id}/{thread_id}")
