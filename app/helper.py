@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages.utils import trim_messages
+from openai import OpenAIError, RateLimitError, APITimeoutError, APIConnectionError
 
 # Your app-specific prompts/config
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
@@ -85,6 +86,74 @@ def get_trimmer_object(token_counter_model, max_tokens=MAX_TOKENS_FOR_TRIM, stra
             start_on=start_on,
         )
     return trimmer
+
+
+def handle_openai_error(error: Exception, context: str = "OpenAI operation") -> AIMessage:
+    """
+    Handle OpenAI API errors and return a graceful AIMessage response.
+    
+    Args:
+        error: The exception that occurred
+        context: Context description for logging
+        
+    Returns:
+        AIMessage with user-friendly error message
+    """
+    if isinstance(error, RateLimitError):
+        message = "I'm experiencing high demand right now. Please try again in a few moments."
+        LOGGER.warning(f"{context} - Rate limit exceeded: {error}")
+    elif isinstance(error, APITimeoutError):
+        message = "The request took too long to process. Please try again."
+        LOGGER.warning(f"{context} - Request timeout: {error}")
+    elif isinstance(error, APIConnectionError):
+        message = "I'm having trouble connecting to my services. Please check your connection and try again."
+        LOGGER.error(f"{context} - Connection error: {error}")
+    elif isinstance(error, OpenAIError):
+        message = "I'm experiencing a technical issue. Please try again in a moment."
+        LOGGER.error(f"{context} - OpenAI API error: {error}")
+    else:
+        message = "I'm unable to process your request at the moment. Please try again."
+        LOGGER.error(f"{context} - Unexpected error: {error}")
+    
+    return AIMessage(content=message)
+
+
+def safe_ai_invoke(func, *args, context: str = "AI operation", **kwargs):
+    """
+    Safely invoke an AI function with error handling.
+    
+    Args:
+        func: The function to invoke
+        *args: Positional arguments for the function
+        context: Context description for error logging
+        **kwargs: Keyword arguments for the function
+        
+    Returns:
+        Either the function result or an error AIMessage
+    """
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        return handle_openai_error(e, context)
+
+
+async def safe_ai_invoke_async(func, *args, context: str = "AI operation", **kwargs):
+    """
+    Safely invoke an async AI function with error handling.
+    
+    Args:
+        func: The async function to invoke
+        *args: Positional arguments for the function
+        context: Context description for error logging
+        **kwargs: Keyword arguments for the function
+        
+    Returns:
+        Either the function result or an error AIMessage
+    """
+    try:
+        return await func(*args, **kwargs)
+    except Exception as e:
+        return handle_openai_error(e, context)
 
 
 def serialize_content_to_string(content: Any) -> str:

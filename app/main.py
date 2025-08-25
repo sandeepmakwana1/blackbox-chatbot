@@ -1,12 +1,14 @@
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
+from contextlib import asynccontextmanager
 
 import json
 from datetime import datetime
 from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
+from app.store import get_record
 from pydantic import BaseModel
 from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
@@ -21,9 +23,29 @@ class ChatCreateRequest(BaseModel):
 class ChatRenameRequest(BaseModel):
     title: str
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager for startup and shutdown."""
+    # Startup
+    LOGGER.info("Starting up application...")
+    try:
+        await service.initialize()
+        LOGGER.info("ChatService initialized successfully")
+    except Exception as e:
+        LOGGER.error(f"Failed to initialize ChatService during startup: {e}")
+        # Don't fail startup - service will initialize on first request
+    
+    yield
+    
+    # Shutdown
+    LOGGER.info("Shutting down application...")
+    try:
+        await service._cleanup_checkpointer()
+        LOGGER.info("ChatService cleaned up successfully")
+    except Exception as e:
+        LOGGER.error(f"Error during shutdown: {e}")
 
-
-app = FastAPI(title="LangGraph Advanced Chatbot")
+app = FastAPI(title="LangGraph Advanced Chatbot", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -141,10 +163,14 @@ async def webhook(request: Request, bg: BackgroundTasks):
             thread_id = metadata.get("thread_id", "12345")
             user_id = metadata.get("user_id", "12345")
 
-
             from app.store import update_record
-            update_record(thread_id, {"answer": answer})
-            print("completed running heavy fetch")
+            import time
+            update_record(thread_id, {
+                "answer": answer,
+                "status": "completed",
+                "end_at": time.time()
+            })
+            print(f"Deep research completed for thread {thread_id}")
         
         bg.add_task(handle)
 
@@ -153,31 +179,23 @@ async def webhook(request: Request, bg: BackgroundTasks):
         rid = evt.data.id
         print(evt.data, "Failed : evt.data ")
 
-        # def handle_terminate():
-        #     print("start running terminate")
-        #     response = client.responses.retrieve(rid)
-        #     metadata = response.metadata
-        #     source_id = metadata.get("source_id", "12345")
-        #     print("source_id: =====>>>", source_id)
+        def handle_terminate():
+            response = client.responses.retrieve(rid)
+            answer = response.output_text
+            metadata = response.metadata
+            thread_id = metadata.get("thread_id", "12345")
+            user_id = metadata.get("user_id", "12345")
 
-        #     key = RedisService.get_redis_key(source_id, "deep_research")
-        #     redis_data = json.loads(RedisService.get(key))
-        #     mapping = redis_data.get(str(rid))
-        #     if mapping:
-        #         mapping["status"] = "terminated"
-        #         try:
-        #             mapping["answer"] = response.output_text or response.error
-        #         except:
-        #             mapping[
-        #                 "answer"
-        #             ] = "Time-out from OpenAI response. Don't worry — we will try again in the background, and you can proceed with content generation."
+            from app.store import update_record
+            import time
+            update_record(thread_id, {
+                "answer": answer,
+                "status": "terminated",
+                "end_at": time.time()
+            })
+            print(f"Deep research completed for thread {thread_id}")
 
-        #         mapping["terminated_at"] = int(time.time())
-        #         redis_data[str(rid)] = mapping
-        #         RedisService.create(key, json.dumps(redis_data))
-        #     print("completed running terminate")
-
-        # bg.add_task(handle_terminate)
+        bg.add_task(handle_terminate)
 
     return {}  # 200
 
@@ -297,6 +315,30 @@ def get_chat_details(user_id: str, thread_id: str):
         raise
     except Exception as e:
         LOGGER.exception("Error getting chat details")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/research/{thread_id}")
+def get_research_status(thread_id: str):
+    """Get deep research status and result for a thread"""
+    try:
+        record = get_record(thread_id)
+        if record:
+            return {
+                    "thread_id": record.get("thread_id"),
+                    "user_id": record.get("user_id"),
+                    "status": record.get("status", "unknown"),
+                    "research_plan": record.get("research_plan"),
+                    "answer": record.get("answer"),
+                    "start_at": record.get("start_at"),
+                    "completed_at": record.get("completed_at"),
+                    "response_id": record.get("response_id")
+                }
+        else:
+            raise HTTPException(status_code=404, detail="Research record not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.exception("Error getting research status")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")

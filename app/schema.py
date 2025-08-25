@@ -14,10 +14,12 @@ class ConversationState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     summary_context: NotRequired[Sequence[BaseMessage]]
     user_id: str
-    conversation_type: str  # "chat" | "search" | "research" | "document_qa"
+    conversation_type: str  # "chat" | "search"| "document_qa" | "deep-research"
     language: str
     thread_id: str  # Added for memory integration
     documents_context: Optional[List[Dict]]
     search_results: Optional[List[Dict]]
-    research_plan: Optional[Dict]
+    research_plan: Optional[str]  # Changed from Dict to str for deep research plan
+    research_status: NotRequired[Optional[str]]  # Status of deep research: "pending", "completed", "failed"
+    research_result: NotRequired[Optional[str]]  # Final result from deep research
     tokens: Optional[Dict]

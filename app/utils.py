@@ -25,6 +25,7 @@ from app.config import DEFAULT_MODELS, SUMMARY_TRIGGER_COUNT, TOOLS, POSTGRES_US
 from app.helper import get_trimmer_object, update_token_tracking, serialize_content_to_string
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
+from app.graph_builder import build_graph, validate_conversation_type
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -71,6 +72,7 @@ class ChatService:
         self._checkpointer_cm = None
         self._is_initialized = False
         self._initialization_lock = asyncio.Lock()
+        self._current_graph_type = "chat"  # Track current graph type
 
 
     # -------------------------- Conversation graph ---------------------------
@@ -99,14 +101,8 @@ class ChatService:
                             raise
                         await asyncio.sleep(2 ** attempt)  # Exponential backoff
                 
-                # Build graph using existing nodes
-                graph = StateGraph(state_schema=ConversationState)
-                graph.add_node("summarize", summarize_node)
-                graph.add_node("chat", chat_node)
-                
-                graph.add_conditional_edges(START, route_summarize, {"summarize": "summarize", "chat": "chat"})
-                graph.add_edge("summarize", "chat")
-                
+                # Build a default chat graph - will be rebuilt per conversation type as needed
+                graph = build_graph("chat")
                 self.app = graph.compile(checkpointer=self.checkpointer)
                 self._is_initialized = True
                 LOGGER.info("ChatService initialized successfully")
@@ -139,6 +135,23 @@ class ChatService:
         except Exception as e:
             LOGGER.info(f"Connection validation failed, reinitializing: {e}")
             await self.initialize()
+            
+    async def _ensure_graph_for_conversation_type(self, conversation_type: str):
+        """Ensure the graph is built for the specific conversation type."""
+        if not validate_conversation_type(conversation_type):
+            LOGGER.warning(f"Invalid conversation type: {conversation_type}, falling back to chat")
+            conversation_type = "chat"
+            
+        # For deep-research, we need the full graph. For others, we can use a simpler one.
+        # But since deep-research graph includes all paths, we'll use it for deep-research
+        # and the standard graph for others.
+        required_graph_type = "deep-research" if conversation_type == "deep-research" else "standard"
+        
+        if self._current_graph_type != required_graph_type:
+            LOGGER.info(f"Switching graph from {self._current_graph_type} to {required_graph_type}")
+            graph = build_graph(conversation_type)
+            self.app = graph.compile(checkpointer=self.checkpointer)
+            self._current_graph_type = required_graph_type
 
     async def process_message(
         self, 
@@ -162,6 +175,7 @@ class ChatService:
             Dict containing the response and metadata
         """
         await self._validate_connection()
+        await self._ensure_graph_for_conversation_type(conversation_type)
 
         config = {"configurable": {"thread_id": thread_id}}
         
@@ -205,6 +219,7 @@ class ChatService:
     ):
         """
         Process a message with streaming responses using LangGraph's astream.
+        Handles interrupts for deep research user input.
         
         Args:
             message: The user's message
@@ -217,16 +232,96 @@ class ChatService:
             Streaming chunks of the response
         """
         await self._validate_connection()
+        await self._ensure_graph_for_conversation_type(conversation_type)
         config = {"configurable": {"thread_id": thread_id}}
         
-        # Get existing state to preserve token tracking
+        # Get existing state to preserve token tracking and check for interrupts
         try:
             existing_state = await self.app.aget_state(config)
             existing_tokens = existing_state.values.get("tokens", {"total_tokens": 0})
+            
+            # Check if we're resuming from an interrupt
+            if existing_state.next and len(existing_state.next) > 0:
+                LOGGER.info(f"Resuming interrupted conversation with user input: {message}")
+                LOGGER.info(f"Interrupted state next nodes: {existing_state.next}")
+                # Resume with the user's clarification by updating the state and resuming
+                yield {"type": "start", "content": ""}
+                full_response = ""
+                try:
+                    # Update the conversation state with user input and resume from where we left off
+                    user_clarification = HumanMessage(content=message)
+                    
+                    # Update the state with the user's response
+                    await self.app.aupdate_state(config, {"messages": [user_clarification]})
+                    
+                    if conversation_type == "deep-research":
+                        # Use the same values-based streaming for deep research resume
+                        # Resume execution with None (no new input, just continue)
+                        async for chunk in self.app.astream(None, config, stream_mode="values"):
+                            # Extract messages from the chunk
+                            messages = chunk.get("messages", [])
+                            if messages:
+                                # Get the last message and stream its content
+                                last_message = messages[-1]
+                                if hasattr(last_message, 'content'):
+                                    content_str = serialize_content_to_string(last_message.content)
+                                    # Only yield if this is new content
+                                    if content_str and content_str != full_response:
+                                        if len(content_str) > len(full_response):
+                                            new_content = content_str[len(full_response):]
+                                            full_response = content_str
+                                            if new_content.strip():
+                                                # Simulate streaming by breaking content into words
+                                                words = new_content.split()
+                                                for i, word in enumerate(words):
+                                                    if i == 0:
+                                                        yield {"type": "chunk", "content": word}
+                                                    else:
+                                                        yield {"type": "chunk", "content": " " + word}
+                                        else:
+                                            # Handle case where content is completely different
+                                            full_response = content_str
+                                            if content_str.strip():
+                                                words = content_str.split()
+                                                for i, word in enumerate(words):
+                                                    if i == 0:
+                                                        yield {"type": "chunk", "content": word}
+                                                    else:
+                                                        yield {"type": "chunk", "content": " " + word}
+                    else:
+                        # Standard streaming for non-deep-research resume
+                        async for chunk, _meta in self.app.astream(None, config, stream_mode="messages"):
+                            content = getattr(chunk, "content", None)
+                            if content is not None:
+                                content_str = serialize_content_to_string(content)
+                                
+                                if content_str.strip():
+                                    full_response += content_str
+                                    yield {"type": "chunk", "content": content_str}
+
+                    final_state = await self.app.aget_state(config)
+                    token_usage = final_state.values.get("tokens", {})
+                    LOGGER.info(f"Resume completed, final state next nodes: {final_state.next}")
+
+                    yield {
+                        "type": "complete",
+                        "content": full_response,
+                        "token_tracking": token_usage,
+                        "thread_id": thread_id,
+                        "done": True
+                    }
+                    return
+                    
+                except Exception as e:
+                    LOGGER.exception("Error resuming interrupted conversation")
+                    yield {"type": "error", "message": str(e)}
+                    return
+                    
         except Exception as e:
             LOGGER.warning(f"Failed to get state: {e}")
             existing_tokens = {"total_tokens": 0}
 
+        # Normal flow - start new conversation or continue existing one
         initial_state: ConversationState = {
             "messages": [HumanMessage(content=message)],
             "user_id": user_id,
@@ -239,26 +334,73 @@ class ChatService:
         yield {"type": "start", "content": ""}
 
         full_response = ""
+        interrupted = False
+        
         try:
-            async for chunk, _meta in self.app.astream(initial_state, config, stream_mode="messages"):
-                content = getattr(chunk, "content", None)
-                if content is not None:
-                    content_str = serialize_content_to_string(content)
-                    
-                    if content_str.strip():
-                        full_response += content_str
-                        yield {"type": "chunk", "content": content_str}
+            if conversation_type == "deep-research":
+                # For deep research, use values streaming to handle interrupts properly
+                async for chunk in self.app.astream(initial_state, config, stream_mode="values"):
+                    # Extract messages from the chunk
+                    messages = chunk.get("messages", [])
+                    if messages:
+                        # Get the last message and stream its content
+                        last_message = messages[-1]
+                        if hasattr(last_message, 'content'):
+                            content_str = serialize_content_to_string(last_message.content)
+                            # Only yield if this is new content
+                            if content_str and content_str not in full_response:
+                                new_content = content_str[len(full_response):]
+                                full_response = content_str
+                                if new_content.strip():
+                                    # Simulate streaming by breaking content into words
+                                    words = new_content.split()
+                                    for i, word in enumerate(words):
+                                        if i == 0:
+                                            yield {"type": "chunk", "content": word}
+                                        else:
+                                            yield {"type": "chunk", "content": " " + word}
+                
+                # Check if the conversation was interrupted (waiting for user input)
+                final_state = await self.app.aget_state(config)
+                
+                if final_state.next and len(final_state.next) > 0:
+                    interrupted = True
+                    LOGGER.info(f"Deep research workflow interrupted, waiting for user clarification")
+                    yield {
+                        "type": "interrupted",
+                        "content": "Waiting for your response to continue...",
+                        "thread_id": thread_id,
+                        "interrupted": True
+                    }
+                else:
+                    token_usage = final_state.values.get("tokens", {})
+                    yield {
+                        "type": "complete",
+                        "content": full_response,
+                        "token_tracking": token_usage,
+                        "thread_id": thread_id,
+                        "done": True
+                    }
+            else:
+                # Standard message streaming for other conversation types
+                async for chunk, _meta in self.app.astream(initial_state, config, stream_mode="messages"):
+                    content = getattr(chunk, "content", None)
+                    if content is not None:
+                        content_str = serialize_content_to_string(content)
+                        
+                        if content_str.strip():
+                            full_response += content_str
+                            yield {"type": "chunk", "content": content_str}
 
-            final_state = await self.app.aget_state(config)
-            token_usage = final_state.values.get("tokens", {})
-
-            yield {
-                "type": "complete",
-                "content": full_response,
-                "token_tracking": token_usage,
-                "thread_id": thread_id,
-                "done": True
-            }
+                final_state = await self.app.aget_state(config)
+                token_usage = final_state.values.get("tokens", {})
+                yield {
+                    "type": "complete",
+                    "content": full_response,
+                    "token_tracking": token_usage,
+                    "thread_id": thread_id,
+                    "done": True
+                }
 
         except Exception as e:
             LOGGER.exception("Streaming error")

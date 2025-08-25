@@ -11,7 +11,7 @@ DEFAULT_MODELS = {
     "summarize":  os.getenv("MODEL_SUMMARIZE", "gpt-4o-mini"),
     "research":   os.getenv("MODEL_RESEARCH", "gpt-4o"),
     "embed":      os.getenv("MODEL_EMBED", "text-embedding-3-large"),
-    "research_plain":   os.getenv("MODEL_RESEARCH_PLAIN", "gpt-4.1"),
+    "research_plain":   os.getenv("MODEL_RESEARCH_PLAIN", "gpt-4.1-2025-04-14"),
 }
 # Token tracking only - no pricing needed
 
@@ -31,6 +31,11 @@ POSTGRES_USER=os.getenv("POSTGRES_USER")
 POSTGRES_PASSWORD=os.getenv("POSTGRES_PASSWORD")
 POSTGRES_HOST=os.getenv("POSTGRES_HOST")
 POSTGRES_PORT=os.getenv("POSTGRES_PORT")
+
+# Deep Research Configuration
+CONV_TYPE_DEEP_RESEARCH = "deep-research"
+OPENAI_WEBHOOK_SECRET = os.getenv("OPENAI_WEBHOOK_SECRET", "whsec_0hZag1qEAm++5Qr8OqPkJ37a929haN/oeaTo0gFtzkQ=")
+OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "o4-mini")
 
 
 
