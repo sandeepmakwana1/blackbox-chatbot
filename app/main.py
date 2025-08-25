@@ -9,6 +9,7 @@ from app.utils import ChatService, ConversationState, HumanMessage, SystemMessag
 from langchain_core.messages import AIMessage
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
+from app.websocket_manager import WebSocketConnectionManager
 from app.store import get_record
 from pydantic import BaseModel
 from typing import Optional
@@ -56,10 +57,21 @@ app.add_middleware(
 
 service = ChatService()
 chat_manager = ChatManager()
+websocket_manager = WebSocketConnectionManager()
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     await websocket.accept()
+    current_thread_id = None
+    
+    # Send initial connection message to get thread_id immediately
+    initial_message = {
+        "type": "connection_established",
+        "message": "Please send your thread_id to enable real-time notifications",
+        "user_id": user_id
+    }
+    await websocket.send_text(json.dumps(initial_message))
+    
     try:
         while True:
             raw = await websocket.receive_text()
@@ -70,9 +82,34 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             thread_id = payload.get("thread_id")
             language = payload.get("language", "English")
             
+            # Check if this is just a thread registration message
+            is_register_only = payload.get("action") == "register" or user_message == ""
+            
             # If no thread_id provided, get or create a default chat
             if not thread_id:
                 thread_id = chat_manager.get_or_create_default_chat(user_id)
+            
+            # Register WebSocket connection for this thread (if thread changed)
+            if current_thread_id != thread_id:
+                # Remove connection from previous thread if exists
+                if current_thread_id:
+                    await websocket_manager.remove_connection(current_thread_id, user_id)
+                
+                # Add connection to current thread
+                await websocket_manager.add_connection(thread_id, user_id, websocket)
+                current_thread_id = thread_id
+                LOGGER.info(f"WebSocket registered to thread {thread_id} for user {user_id}")
+            
+            # If this is just a registration message, send confirmation and continue
+            if is_register_only:
+                registration_response = {
+                    "type": "registration_confirmed",
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "message": "WebSocket registered for real-time notifications"
+                }
+                await websocket.send_text(json.dumps(registration_response))
+                continue
             
             # Ensure the chat exists in our metadata
             existing_chat = chat_manager.get_chat(user_id, thread_id)
@@ -123,11 +160,14 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         except:
             # If we can't send the error message, just log it
             LOGGER.error(f"Failed to send error message to user {user_id}")
-        finally:
-            try:
-                await websocket.close()
-            except:
-                pass
+    finally:
+        # Clean up WebSocket connection
+        if current_thread_id:
+            await websocket_manager.remove_connection(current_thread_id, user_id)
+        try:
+            await websocket.close()
+        except:
+            pass
 
 
 client = OpenAI(
@@ -177,6 +217,36 @@ async def update_conversation_state_from_webhook(thread_id: str, user_id: str, a
         await service.app.aupdate_state(config, patch)
         
         LOGGER.info(f"Webhook state updated for thread {thread_id}, status={status}")
+        
+        # Broadcast the result to connected WebSocket clients
+        try:
+            # Get current connection stats for debugging
+            stats = websocket_manager.get_connection_stats()
+            LOGGER.info(f"Current WebSocket stats before broadcast: {stats}")
+            
+            webhook_message = {
+                "type": "webhook_result",
+                "content": answer,
+                "thread_id": thread_id,
+                "research_status": status,
+                "done": True,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            LOGGER.info(f"Attempting to broadcast webhook result for thread {thread_id}")
+            LOGGER.info(f"Webhook message: {webhook_message}")
+            
+            broadcast_count = await websocket_manager.broadcast_to_thread(thread_id, webhook_message)
+            LOGGER.info(f"Broadcasted webhook result to {broadcast_count} connected clients on thread {thread_id}")
+            
+            if broadcast_count == 0:
+                LOGGER.warning(f"No connected clients found for thread {thread_id}. Current connections: {stats['threads']}")
+            
+        except Exception as broadcast_error:
+            LOGGER.error(f"Failed to broadcast webhook result for thread {thread_id}: {broadcast_error}")
+            import traceback
+            LOGGER.error(f"Broadcast error traceback: {traceback.format_exc()}")
+            # Don't let broadcast failures affect the webhook processing
         
     except Exception as e:
         LOGGER.error(f"Failed to update conversation state for thread {thread_id}: {e}")
@@ -420,6 +490,42 @@ def get_research_status(thread_id: str):
         raise
     except Exception as e:
         LOGGER.exception("Error getting research status")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/websocket/stats")
+def get_websocket_stats():
+    """Get WebSocket connection statistics for monitoring"""
+    try:
+        stats = websocket_manager.get_connection_stats()
+        return {"status": "success", "websocket_stats": stats}
+    except Exception as e:
+        LOGGER.exception("Error getting WebSocket stats")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/test/broadcast/{thread_id}")
+async def test_broadcast(thread_id: str, message: dict = None):
+    """Test endpoint to manually trigger a webhook broadcast"""
+    try:
+        test_message = message or {
+            "type": "webhook_result",
+            "content": "This is a test message from the manual broadcast endpoint!",
+            "thread_id": thread_id,
+            "research_status": "completed", 
+            "done": True,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        LOGGER.info(f"Testing broadcast for thread {thread_id} with message: {test_message}")
+        broadcast_count = await websocket_manager.broadcast_to_thread(thread_id, test_message)
+        
+        return {
+            "status": "success", 
+            "thread_id": thread_id,
+            "broadcast_count": broadcast_count,
+            "message": test_message
+        }
+    except Exception as e:
+        LOGGER.exception("Error testing broadcast")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")
