@@ -236,7 +236,16 @@ async def deep_research_run_node(state: ConversationState) -> Dict:
         add_record(record)
 
         LOGGER.info(f"Deep research initiated for thread {state.get('thread_id')}")
-        return {"messages": [AIMessage(content="Executing your deepresearch...")]}
+        
+        # Create a message that will trigger frontend research monitoring
+        research_message = AIMessage(
+            content="Deep research initiated. This process will run in the background and you'll receive comprehensive results when complete."
+        )
+        
+        return {
+            "messages": [research_message],
+            "research_initiated": True  # Flag to indicate research has started
+        }
 
     except Exception as e:
         LOGGER.error(f"Error in deep_research_run_node: {e}")

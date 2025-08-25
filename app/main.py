@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from langgraph.types import interrupt, Command
+from app.config import OPENAI_WEBHOOK_SECRET
 
 class ChatCreateRequest(BaseModel):
     title: Optional[str] = None
@@ -163,7 +163,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
 
 
 client = OpenAI(
-    webhook_secret="whsec_0hZag1qEAm++5Qr8OqPkJ37a929haN/oeaTo0gFtzkQ=",
+    webhook_secret=OPENAI_WEBHOOK_SECRET,
 )
 
 

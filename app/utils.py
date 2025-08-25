@@ -245,7 +245,7 @@ class ChatService:
                 LOGGER.info(f"Resuming interrupted conversation with user input: {message}")
                 LOGGER.info(f"Interrupted state next nodes: {existing_state.next}")
                 # Resume with the user's clarification by updating the state and resuming
-                yield {"type": "start", "content": ""}
+                yield {"type": "start", "content": "", "conversation_type": conversation_type}
                 full_response = ""
                 try:
                     # Update the conversation state with user input and resume from where we left off
@@ -331,7 +331,7 @@ class ChatService:
             "tokens": existing_tokens,
         }
 
-        yield {"type": "start", "content": ""}
+        yield {"type": "start", "content": "", "conversation_type": conversation_type}
 
         full_response = ""
         interrupted = False
@@ -359,6 +359,14 @@ class ChatService:
                                             yield {"type": "chunk", "content": word}
                                         else:
                                             yield {"type": "chunk", "content": " " + word}
+                    
+                    # Check if research has been initiated
+                    if chunk.get("research_initiated"):
+                        yield {
+                            "type": "research_initiated",
+                            "content": "Deep research has been initiated and is running in the background.",
+                            "thread_id": thread_id
+                        }
                 
                 # Check if the conversation was interrupted (waiting for user input)
                 final_state = await self.app.aget_state(config)
