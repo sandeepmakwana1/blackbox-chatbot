@@ -247,6 +247,7 @@ class ChatService:
                 # Resume with the user's clarification by updating the state and resuming
                 yield {"type": "start", "content": "", "conversation_type": conversation_type}
                 full_response = ""
+                research_initiated_sent = False  # Track notification in resume flow too
                 try:
                     # Update the conversation state with user input and resume from where we left off
                     user_clarification = HumanMessage(content=message)
@@ -256,20 +257,42 @@ class ChatService:
                     
                     if conversation_type == "deep-research":
                         # Use the same values-based streaming for deep research resume
+                        # Get the current number of messages to track new ones only
+                        existing_messages_count = len(existing_state.values.get("messages", []))
+                        
                         # Resume execution with None (no new input, just continue)
                         async for chunk in self.app.astream(None, config, stream_mode="values"):
                             # Extract messages from the chunk
                             messages = chunk.get("messages", [])
-                            if messages:
-                                # Get the last message and stream its content
-                                last_message = messages[-1]
-                                if hasattr(last_message, 'content'):
-                                    content_str = serialize_content_to_string(last_message.content)
-                                    # Only yield if this is new content
-                                    if content_str and content_str != full_response:
-                                        if len(content_str) > len(full_response):
+                            
+                            # Only process new messages beyond what was already there
+                            if messages and len(messages) > existing_messages_count:
+                                for msg_idx in range(existing_messages_count, len(messages)):
+                                    msg = messages[msg_idx]
+                                    
+                                    # Skip HumanMessage to avoid echoing
+                                    if isinstance(msg, HumanMessage):
+                                        continue
+                                    
+                                    # Process AIMessage content  
+                                    if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
+                                        content_str = serialize_content_to_string(msg.content)
+                                        
+                                        # Check if this is the research initiation message during resume (only send once)
+                                        if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
+                                            # Send research_initiated notification BEFORE streaming the message
+                                            yield {
+                                                "type": "research_initiated",
+                                                "content": "Deep research has been initiated and is running in the background.",
+                                                "thread_id": thread_id
+                                            }
+                                            research_initiated_sent = True  # Mark as sent to prevent duplicates
+                                            LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (resume flow)")
+                                        
+                                        if content_str and len(content_str) > len(full_response):
                                             new_content = content_str[len(full_response):]
                                             full_response = content_str
+                                            
                                             if new_content.strip():
                                                 # Simulate streaming by breaking content into words
                                                 words = new_content.split()
@@ -278,16 +301,17 @@ class ChatService:
                                                         yield {"type": "chunk", "content": word}
                                                     else:
                                                         yield {"type": "chunk", "content": " " + word}
-                                        else:
-                                            # Handle case where content is completely different
-                                            full_response = content_str
-                                            if content_str.strip():
-                                                words = content_str.split()
-                                                for i, word in enumerate(words):
-                                                    if i == 0:
-                                                        yield {"type": "chunk", "content": word}
-                                                    else:
-                                                        yield {"type": "chunk", "content": " " + word}
+                                
+                                existing_messages_count = len(messages)
+                            
+                            # Check for research initiation during resume (only if not already sent)
+                            if chunk.get("research_initiated") and not research_initiated_sent:
+                                yield {
+                                    "type": "research_initiated",
+                                    "content": "Deep research has been initiated and is running in the background.",
+                                    "thread_id": thread_id
+                                }
+                                research_initiated_sent = True  # Mark as sent to prevent duplicates
                     else:
                         # Standard streaming for non-deep-research resume
                         async for chunk, _meta in self.app.astream(None, config, stream_mode="messages"):
@@ -302,14 +326,14 @@ class ChatService:
                     final_state = await self.app.aget_state(config)
                     token_usage = final_state.values.get("tokens", {})
                     LOGGER.info(f"Resume completed, final state next nodes: {final_state.next}")
-
-                    yield {
-                        "type": "complete",
-                        "content": full_response,
-                        "token_tracking": token_usage,
-                        "thread_id": thread_id,
-                        "done": True
-                    }
+                    if conversation_type != "deep-research":
+                        yield {
+                            "type": "complete",
+                            "content": full_response,
+                            "token_tracking": token_usage,
+                            "thread_id": thread_id,
+                            "done": True
+                        }
                     return
                     
                 except Exception as e:
@@ -335,38 +359,69 @@ class ChatService:
 
         full_response = ""
         interrupted = False
+        research_initiated_sent = False  # Track if we've already sent the research_initiated notification
         
         try:
             if conversation_type == "deep-research":
                 # For deep research, use values streaming to handle interrupts properly
+                # Track the index of the last message we've already sent to avoid duplicates
+                last_sent_index = 1  # Start at 1 to skip the initial user message
+                
                 async for chunk in self.app.astream(initial_state, config, stream_mode="values"):
                     # Extract messages from the chunk
                     messages = chunk.get("messages", [])
-                    if messages:
-                        # Get the last message and stream its content
-                        last_message = messages[-1]
-                        if hasattr(last_message, 'content'):
-                            content_str = serialize_content_to_string(last_message.content)
-                            # Only yield if this is new content
-                            if content_str and content_str not in full_response:
-                                new_content = content_str[len(full_response):]
-                                full_response = content_str
-                                if new_content.strip():
-                                    # Simulate streaming by breaking content into words
-                                    words = new_content.split()
-                                    for i, word in enumerate(words):
-                                        if i == 0:
-                                            yield {"type": "chunk", "content": word}
-                                        else:
-                                            yield {"type": "chunk", "content": " " + word}
                     
-                    # Check if research has been initiated
-                    if chunk.get("research_initiated"):
+                    # Only process new messages that haven't been sent yet
+                    if messages and len(messages) > last_sent_index:
+                        # Process only the new messages
+                        for msg_idx in range(last_sent_index, len(messages)):
+                            msg = messages[msg_idx]
+                            
+                            # Skip HumanMessage to avoid echoing user input
+                            if isinstance(msg, HumanMessage):
+                                continue
+                            
+                            # Process AIMessage content
+                            if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
+                                content_str = serialize_content_to_string(msg.content)
+                                
+                                # Check if this is the research initiation message (only send once)
+                                if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
+                                    # Send research_initiated notification BEFORE streaming the message
+                                    yield {
+                                        "type": "research_initiated",
+                                        "content": "Deep research has been initiated and is running in the background.",
+                                        "thread_id": thread_id
+                                    }
+                                    research_initiated_sent = True  # Mark as sent to prevent duplicates
+                                    LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (message detection)")
+                                
+                                # Calculate the new content delta
+                                if content_str and len(content_str) > len(full_response):
+                                    new_content = content_str[len(full_response):]
+                                    full_response = content_str
+                                    
+                                    if new_content.strip():
+                                        # Simulate streaming by breaking content into words
+                                        words = new_content.split()
+                                        for i, word in enumerate(words):
+                                            if i == 0:
+                                                yield {"type": "chunk", "content": word}
+                                            else:
+                                                yield {"type": "chunk", "content": " " + word}
+                        
+                        # Update the last sent index
+                        last_sent_index = len(messages)
+                    
+                    # Check if research has been initiated (could be in chunk or in state values) - only if not already sent
+                    if (chunk.get("research_initiated") or chunk.get("research_initiated") is True) and not research_initiated_sent:
                         yield {
                             "type": "research_initiated",
                             "content": "Deep research has been initiated and is running in the background.",
                             "thread_id": thread_id
                         }
+                        research_initiated_sent = True  # Mark as sent to prevent duplicates
+                        LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (chunk flag)")
                 
                 # Check if the conversation was interrupted (waiting for user input)
                 final_state = await self.app.aget_state(config)
@@ -383,7 +438,7 @@ class ChatService:
                 else:
                     token_usage = final_state.values.get("tokens", {})
                     yield {
-                        "type": "complete",
+                        "type": "done",
                         "content": full_response,
                         "token_tracking": token_usage,
                         "thread_id": thread_id,
