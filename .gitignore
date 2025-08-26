@@ -2,11 +2,10 @@ venv/
 __pycache__/
 .qodo
 .idea
-ui/
 *.ipynb
 eg.*
 .env
 notebook/
 database/
 backup/
-
+.DS_Store

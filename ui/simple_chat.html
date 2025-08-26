@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: white;
+            height: 100vh;
+            display: flex;
+            color: black;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: #f5f5f5;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #ccc;
+            background: #e5e5e5;
+        }
+
+        .sidebar-header h2 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            background: white;
+            color: black;
+            border: 1px solid #999;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .new-chat-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            background: white;
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-item:hover {
+            background: #f9f9f9;
+        }
+
+        .chat-item.active {
+            background: #e0e0e0;
+        }
+
+        .chat-item-content {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-actions {
+            display: none;
+            gap: 5px;
+        }
+
+        .chat-item:hover .chat-actions {
+            display: flex;
+        }
+
+        .chat-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .chat-action-btn:hover {
+            background: #ddd;
+        }
+
+        .rename-btn {
+            color: #007bff;
+        }
+
+        .delete-btn {
+            color: #dc3545;
+        }
+
+        .chat-title {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .chat-preview {
+            font-size: 12px;
+            color: #666;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #f5f5f5;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-title-display {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .status {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status.connected {
+            color: #000;
+        }
+
+        .status.researching {
+            color: #ff6600;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .research-status {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+        }
+
+        .research-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .research-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            animation: spin 2s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .research-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1a1a1a;
+        }
+
+        .research-subtitle {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 12px;
+        }
+
+        .progress-container {
+            margin: 12px 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #f3f4f6;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #9ca3af;
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .progress-step.active {
+            color: #3b82f6;
+            font-weight: 500;
+        }
+
+        .progress-step.completed {
+            color: #10b981;
+        }
+
+        .step-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #d1d5db;
+        }
+
+        .step-dot.active {
+            background-color: #3b82f6;
+        }
+
+        .step-dot.completed {
+            background-color: #10b981;
+        }
+
+        .research-message {
+            font-size: 13px;
+            color: #374151;
+            margin-top: 8px;
+        }
+
+        .research-complete {
+            background: #f0fdf4;
+            border-color: #bbf7d0;
+        }
+
+        .research-complete .research-icon {
+            animation: none;
+            color: #10b981;
+        }
+
+        .research-error {
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .research-error .research-icon {
+            animation: none;
+            color: #ef4444;
+        }
+        
+        .clarification-prompt {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            color: #856404;
+        }
+        
+        .clarification-prompt h4 {
+            margin-bottom: 10px;
+            color: #856404;
+        }
+        
+        .clarification-prompt .icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            padding: 10px 20px;
+            background: #f9f9f9;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            margin-right: 5px;
+        }
+
+        .control-group select,
+        .control-group input {
+            padding: 4px;
+            border: 1px solid #ccc;
+            font-size: 12px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: white;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-sender {
+            font-weight: bold;
+            font-size: 12px;
+            width: 60px;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            background: #f5f5f5;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-width: 70%;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .message.user .message-content {
+            background: #e5e5e5;
+        }
+
+        .web-sources {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #ddd;
+        }
+
+        .web-sources-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .web-source-link {
+            display: inline-block;
+            font-size: 11px;
+            color: #007bff;
+            text-decoration: none;
+            margin-right: 10px;
+            margin-bottom: 3px;
+            padding: 2px 6px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+
+        .web-source-link:hover {
+            background: #e9ecef;
+            text-decoration: underline;
+        }
+
+        .web-search-result {
+            margin-bottom: 15px;
+        }
+
+        .web-search-title {
+            font-weight: bold;
+            font-size: 15px;
+            margin-bottom: 5px;
+        }
+
+        .web-search-url {
+            font-size: 12px;
+            color: #006621;
+            margin-bottom: 5px;
+        }
+
+        .typing-indicator {
+            display: none;
+            font-style: italic;
+            color: #666;
+            padding: 10px 0;
+        }
+
+        .input-container {
+            padding: 15px 20px;
+            background: #f9f9f9;
+            border-top: 1px solid #ccc;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 40px;
+        }
+
+        .send-button {
+            background: #f0f0f0;
+            color: black;
+            border: 1px solid #999;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        .send-button:disabled {
+            background: #f9f9f9;
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .welcome-message {
+            text-align: center;
+            padding: 50px 20px;
+            color: #666;
+        }
+
+        .error-message {
+            background: #f0f0f0;
+            color: #333;
+            padding: 10px;
+            border: 1px solid #999;
+            margin: 10px 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 15px;
+            color: #666;
+        }
+
+        /* Debug info */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: white;
+            border: 1px solid #999;
+            padding: 5px 10px;
+            font-size: 11px;
+            color: #666;
+            display: none;
+        }
+
+        /* Deep Research Progress Bar Styles - ChatGPT Style */
+        .research-status {
+            margin: 20px 0;
+            padding: 16px 20px;
+            background: #f7f7f8;
+            border-radius: 12px;
+            border-left: 4px solid #10a37f;
+        }
+
+        .research-status.research-complete {
+            background: #f0f9ff;
+            border-left-color: #0ea5e9;
+        }
+
+        .research-status.research-error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+        }
+
+        .research-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .research-icon {
+            font-size: 18px;
+        }
+
+        .research-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: #374151;
+        }
+
+        .research-subtitle {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .progress-container {
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10a37f, #0ea5e9);
+            border-radius: 3px;
+            transition: width 0.6s ease-in-out;
+        }
+
+        .research-complete .progress-fill {
+            background: #0ea5e9;
+        }
+
+        .research-error .progress-fill {
+            background: #ef4444;
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #9ca3af;
+            flex: 1;
+            position: relative;
+        }
+
+        .progress-step.active {
+            color: #10a37f;
+            font-weight: 500;
+        }
+
+        .progress-step.completed {
+            color: #059669;
+            font-weight: 500;
+        }
+
+        .step-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d5db;
+            position: relative;
+        }
+
+        .step-dot.active {
+            background: #10a37f;
+            animation: pulse 2s infinite;
+        }
+
+        .step-dot.completed {
+            background: #059669;
+        }
+
+        .step-dot.completed::after {
+            content: '✓';
+            position: absolute;
+            top: -6px;
+            left: -1px;
+            font-size: 8px;
+            color: white;
+            font-weight: bold;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.2);
+            }
+        }
+
+        .research-message {
+            color: #6b7280;
+            font-size: 14px;
+            font-style: italic;
+        }
+
+        /* Status indicator enhancement */
+        .status.researching {
+            color: #10a37f !important;
+            font-weight: 600;
+        }
+
+        .status.researching::before {
+            content: '🔍 ';
+        }
+
+        /* Clarification prompt styles */
+        .clarification-prompt {
+            margin: 20px 0;
+            padding: 16px 20px;
+            background: #fef3c7;
+            border-radius: 12px;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .clarification-prompt h4 {
+            margin: 0 0 8px 0;
+            color: #92400e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .clarification-prompt .icon {
+            font-size: 18px;
+        }
+
+        .clarification-prompt p {
+            margin: 8px 0;
+            color: #78350f;
+            font-size: 14px;
+        }
+
+        .clarification-prompt strong {
+            color: #92400e;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>Chat History</h2>
+            <button class="new-chat-btn" onclick="createNewChat()">New Chat</button>
+        </div>
+        <div class="chat-list" id="chatList">
+            <div class="loading">Loading chats...</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="chat-header">
+            <div class="chat-title-display" id="chatTitle">New Chat</div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button onclick="getConversationState()"
+                    style="background: none; border: none; cursor: pointer; font-size: 12px; color: #666;"
+                    title="View conversation state">📊</button>
+                <div class="status" id="status">Disconnected</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label>User ID:</label>
+                <input type="text" id="userId" value="user_001" placeholder="Enter user ID">
+            </div>
+            <div class="control-group">
+                <label>Type:</label>
+                <select id="chatType">
+                    <option value="chat">Chat</option>
+                    <option value="web">Web Search</option>
+                    <option value="research">Research</option>
+                    <option value="deep-research">Deep Research</option>
+                    <option value="document_qa">Document Q&A</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Language:</label>
+                <select id="language">
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                    <option value="Chinese">Chinese</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="messages-container" id="messagesContainer">
+            <div class="welcome-message" id="welcomeMessage">
+                <h2>Simple Chat Interface</h2>
+                <p>Start a conversation by typing a message below.</p>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                AI is typing...
+            </div>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <textarea id="messageInput" class="message-input"
+                    placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
+                    rows="1"></textarea>
+                <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Info -->
+    <div class="debug-info" id="debugInfo">
+        <div id="debugDetails"></div>
+    </div>
+
+    <script>
+        // Global variables
+        const API_BASE = 'http://127.0.0.1:8000';
+        let socket = null;
+        let isConnected = false;
+        let currentMessage = '';
+        let currentThreadId = null;
+        let currentUserId = 'user_001';
+        let userChats = [];
+        let researchPollingInterval = null;
+        let isResearching = false;
+        let isWaitingForClarification = false;
+
+        // Initialize on page load
+        window.addEventListener('load', function () {
+            initializeChat();
+        });
+
+        async function initializeChat() {
+            console.log('Initializing chat...');
+            currentUserId = document.getElementById('userId').value || 'user_001';
+            await loadUserChats();
+            connect();
+
+            // Auto-resize textarea
+            const messageInput = document.getElementById('messageInput');
+            messageInput.addEventListener('input', function () {
+                this.style.height = 'auto';
+                this.style.height = this.scrollHeight + 'px';
+            });
+
+            // Handle Enter key
+            messageInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Handle user ID changes
+            document.getElementById('userId').addEventListener('change', async function () {
+                currentUserId = this.value || 'user_001';
+                currentThreadId = null;
+                await loadUserChats();
+                if (socket) {
+                    socket.close();
+                }
+                setTimeout(connect, 100);
+            });
+        }
+
+        // Chat Management Functions
+        async function loadUserChats() {
+            console.log('Loading user chats for:', currentUserId);
+            try {
+                const response = await fetch(`${API_BASE}/api/chats/${currentUserId}`);
+                const data = await response.json();
+                console.log('Chats response:', data);
+
+                if (data.status === 'success') {
+                    userChats = data.chats;
+                    renderChatList();
+
+                    // If no current thread and we have chats, select the first one
+                    if (!currentThreadId && userChats.length > 0) {
+                        selectChat(userChats[0].thread_id);
+                    }
+                } else {
+                    console.error('Failed to load chats:', data);
+                }
+            } catch (error) {
+                console.error('Error loading chats:', error);
+                document.getElementById('chatList').innerHTML = '<div class="empty-state">Failed to load chats</div>';
+            }
+        }
+
+        function renderChatList() {
+            const chatList = document.getElementById('chatList');
+
+            if (userChats.length === 0) {
+                chatList.innerHTML = '<div class="empty-state">No chats yet.<br>Create your first chat!</div>';
+                return;
+            }
+
+            let html = '';
+            userChats.forEach(chat => {
+                const isActive = chat.thread_id === currentThreadId;
+                html += `
+                    <div class="chat-item ${isActive ? 'active' : ''}" onclick="selectChat('${chat.thread_id}')">
+                        <div class="chat-item-content">
+                            <div class="chat-title">${escapeHtml(chat.title)}</div>
+                            <div class="chat-preview">${escapeHtml(chat.last_message_preview || 'No messages yet')}</div>
+                        </div>
+                        <div class="chat-actions">
+                            <button class="chat-action-btn rename-btn" onclick="renameChat(event, '${chat.thread_id}', '${escapeHtml(chat.title)}')">✏️</button>
+                            <button class="chat-action-btn delete-btn" onclick="deleteChat(event, '${chat.thread_id}')">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            chatList.innerHTML = html;
+        }
+
+        async function createNewChat() {
+            console.log('Creating new chat...');
+            try {
+                const response = await fetch(`${API_BASE}/api/chats/${currentUserId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        conversation_type: document.getElementById('chatType').value || 'chat'
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Create chat response:', data);
+
+                if (data.status === 'success') {
+                    await loadUserChats();
+                    selectChat(data.thread_id);
+                } else {
+                    console.error('Failed to create chat:', data);
+                    showError('Failed to create new chat');
+                }
+            } catch (error) {
+                console.error('Error creating chat:', error);
+                showError('Failed to create new chat');
+            }
+        }
+
+        async function renameChat(event, threadId, currentTitle) {
+            event.stopPropagation();
+
+            const newTitle = prompt('Enter new chat title:', currentTitle);
+            if (!newTitle || newTitle.trim() === '') return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/chats/${currentUserId}/${threadId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        title: newTitle.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    await loadUserChats();
+                    if (currentThreadId === threadId) {
+                        document.getElementById('chatTitle').textContent = newTitle.trim();
+                    }
+                } else {
+                    showError('Failed to rename chat');
+                }
+            } catch (error) {
+                console.error('Error renaming chat:', error);
+                showError('Failed to rename chat');
+            }
+        }
+
+        async function deleteChat(event, threadId) {
+            event.stopPropagation();
+
+            if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/chats/${currentUserId}/${threadId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    // If we're deleting the current chat, switch to another or create new
+                    if (currentThreadId === threadId) {
+                        currentThreadId = null;
+                        document.getElementById('chatTitle').textContent = 'New Chat';
+                        document.getElementById('messagesContainer').innerHTML = `
+                            <div class="welcome-message" id="welcomeMessage">
+                                <h2>Simple Chat Interface</h2>
+                                <p>Start a conversation by typing a message below.</p>
+                            </div>
+                        `;
+                    }
+                    await loadUserChats();
+                } else {
+                    showError('Failed to delete chat');
+                }
+            } catch (error) {
+                console.error('Error deleting chat:', error);
+                showError('Failed to delete chat');
+            }
+        }
+
+        function selectChat(threadId) {
+            console.log('Selecting chat:', threadId);
+            
+            // Close existing WebSocket connection if thread is changing
+            if (currentThreadId !== threadId && socket) {
+                console.log('Thread changed, closing existing WebSocket connection');
+                socket.close();
+                socket = null;
+                isConnected = false;
+            }
+            
+            currentThreadId = threadId;
+
+            // Update UI
+            const selectedChat = userChats.find(chat => chat.thread_id === threadId);
+            if (selectedChat) {
+                document.getElementById('chatTitle').textContent = selectedChat.title;
+            }
+
+            renderChatList(); // Re-render to update active state
+            loadChatMessages(threadId);
+            
+            // Connect WebSocket for this thread
+            if (threadId) {
+                console.log('Connecting to new thread:', threadId);
+                setTimeout(() => connect(), 100); // Small delay to ensure clean connection
+            }
+        }
+
+        async function loadChatMessages(threadId) {
+            console.log('Loading chat messages for thread:', threadId);
+            try {
+                const url = `${API_BASE}/conversation/${currentUserId}/${threadId}`;
+                console.log('Fetching from URL:', url);
+
+                const response = await fetch(url);
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                const messagesContainer = document.getElementById('messagesContainer');
+                messagesContainer.innerHTML = '';
+
+                if (data.messages && data.messages.length > 0) {
+                    console.log(`Loading ${data.messages.length} messages`);
+
+                    // Add messages
+                    data.messages.forEach((msg, index) => {
+                        const content = String(msg.content || '');
+                        console.log(`Adding message ${index + 1}:`, msg.role, content.substring(0, 50) + '...');
+                        if (msg.role !== 'system') {  // Skip system messages
+                            addMessage(msg.role === 'human' ? 'user' : 'assistant', content, false, msg.sources);
+                        }
+                    });
+                } else {
+                    console.log('No messages found, showing welcome message');
+                    // Show welcome message
+                    messagesContainer.innerHTML = `
+                        <div class="welcome-message" id="welcomeMessage">
+                            <h2>Simple Chat Interface</h2>
+                            <p>Start a conversation by typing a message below.</p>
+                        </div>
+                    `;
+                }
+
+                // Add typing indicator
+                const typingIndicatorHtml = `
+                    <div class="typing-indicator" id="typingIndicator">
+                        AI is typing...
+                    </div>
+                `;
+                messagesContainer.insertAdjacentHTML('beforeend', typingIndicatorHtml);
+
+                console.log('Messages loaded successfully');
+
+            } catch (error) {
+                console.error('Error loading chat messages:', error);
+                const messagesContainer = document.getElementById('messagesContainer');
+                messagesContainer.innerHTML = `
+                    <div class="error-message">
+                        Error loading messages: ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        async function getConversationState() {
+            if (!currentThreadId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/chat/${currentThreadId}/state`);
+                const data = await response.json();
+
+                console.log('Conversation state:', data);
+
+                // Display state info in debug panel
+                const debugInfo = document.getElementById('debugInfo');
+                const debugDetails = document.getElementById('debugDetails');
+
+                debugDetails.innerHTML = `
+                    <strong>Conversation State:</strong><br>
+                    Thread ID: ${data.thread_id || 'N/A'}<br>
+                    Messages: ${data.messages ? data.messages.length : 0}<br>
+                    Tokens: ${data.tokens ? JSON.stringify(data.tokens) : 'N/A'}<br>
+                    Error: ${data.error || 'None'}
+                `;
+                debugInfo.style.display = 'block';
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    debugInfo.style.display = 'none';
+                }, 5000);
+
+            } catch (error) {
+                console.error('Error getting conversation state:', error);
+            }
+        }
+
+        // WebSocket Functions
+        function connect() {
+            // Don't connect if we don't have a thread ID
+            if (!currentThreadId) {
+                console.log('No thread ID available, waiting to connect...');
+                updateConnectionStatus(false);
+                return;
+            }
+
+            const url = `ws://localhost:8000/${currentUserId}/${currentThreadId}`;
+            console.log('Connecting to:', url);
+
+            try {
+                socket = new WebSocket(url);
+
+                socket.onopen = function () {
+                    updateConnectionStatus(true);
+                    console.log('Connected to WebSocket for thread:', currentThreadId);
+                };
+
+                socket.onmessage = function (event) {
+                    try {
+                        const response = JSON.parse(event.data);
+                        console.log('WebSocket message:', response);
+                        console.log('Content type:', typeof response.content, response.content);
+                        handleResponse(response);
+                    } catch (e) {
+                        console.error('WebSocket message error:', e);
+                        console.error('Raw message:', event.data);
+                    }
+                };
+
+                socket.onclose = function () {
+                    updateConnectionStatus(false);
+                    // Only auto-reconnect if we still have the same thread ID
+                    setTimeout(() => {
+                        if (!isConnected && currentThreadId) {
+                            connect();
+                        }
+                    }, 3000);
+                };
+
+                socket.onerror = function (error) {
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus(false);
+                    showError('Connection failed. Make sure the server is running on localhost:8000');
+                };
+
+            } catch (error) {
+                console.error('Failed to connect:', error);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            isConnected = connected;
+            const statusElement = document.getElementById('status');
+            const sendButton = document.getElementById('sendButton');
+
+            if (connected) {
+                statusElement.textContent = 'Connected';
+                statusElement.classList.add('connected');
+                sendButton.disabled = false;
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.classList.remove('connected');
+                sendButton.disabled = true;
+            }
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (!message || !isConnected) return;
+
+            const chatType = document.getElementById('chatType').value;
+            const language = document.getElementById('language').value;
+
+            // If no current thread, create one
+            if (!currentThreadId) {
+                try {
+                    const response = await fetch(`${API_BASE}/api/chats/${currentUserId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            conversation_type: chatType,
+                            first_message: message
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        currentThreadId = data.thread_id;
+                        document.getElementById('chatTitle').textContent = data.chat.title;
+                        await loadUserChats();
+                    }
+                } catch (error) {
+                    console.error('Error creating chat:', error);
+                }
+            }
+
+            // Hide welcome message
+            const welcomeMessage = document.getElementById('welcomeMessage');
+            if (welcomeMessage && welcomeMessage.style.display !== 'none') {
+                welcomeMessage.style.display = 'none';
+            }
+
+            // Add user message to chat
+            addMessage('user', message);
+
+            // Clear input
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Show typing indicator
+            showTyping(true);
+
+            // Send to WebSocket
+            const payload = {
+                message: message,
+                type: chatType,
+                thread_id: currentThreadId,
+                language: language
+            };
+
+            console.log('Sending message:', payload);
+            currentMessage = '';
+            socket.send(JSON.stringify(payload));
+        }
+
+        function handleResponse(response) {
+            console.log('handleResponse called with:', response);
+
+            if (response.type === 'start') {
+                showTyping(true);
+                addMessage('assistant', '', true);
+                currentMessage = '';
+                
+                // Start deep research monitoring if needed
+                if (response.conversation_type === 'deep-research') {
+                    startDeepResearchMonitoring();
+                }
+            } else if (response.type === 'chunk') {
+                let content = '';
+                if (Array.isArray(response.content)) {
+                    content = response.content.join('');
+                } else if (typeof response.content === 'object' && response.content !== null) {
+                    content = JSON.stringify(response.content);
+                } else {
+                    content = String(response.content || '');
+                }
+                console.log('Processed chunk content:', content);
+                currentMessage += content;
+                updateCurrentMessage(currentMessage, response.sources);
+            } else if (response.type === 'interrupted') {
+                // Handle deep research interruption - waiting for user clarification
+                showTyping(false);
+                finalizeCurrentMessage();
+                
+                // Set the waiting for clarification state
+                isWaitingForClarification = true;
+                
+                // Show a friendly clarification prompt
+                addClarificationPrompt();
+                
+                // Update status to show we're waiting for user input
+                const statusElement = document.getElementById('status');
+                statusElement.textContent = 'Waiting for clarification';
+                statusElement.classList.add('researching');
+                
+                console.log('Deep research interrupted, waiting for user clarification');
+                
+            } else if (response.type === 'research_initiated') {
+                // Handle deep research initiation - keep monitoring active
+                console.log('🔍 Deep research initiated:', response);
+                
+                // Add the initiation message as an assistant message
+                addMessage('assistant', response.content, false);
+                
+                // Ensure research monitoring is active (should already be from 'start')
+                if (!isResearching) {
+                    startDeepResearchMonitoring();
+                }
+                
+                // Update status to show research is running
+                updateResearchStatus({
+                    status: 'researching',
+                    message: 'Deep research is running in the background. You will receive results when complete.',
+                    progress_percentage: 75,
+                    current_step: 3,
+                    total_steps: 4
+                });
+                
+            } else if (response.type === 'webhook_result') {
+                // Handle webhook results from deep research completion
+                console.log('🎉 Webhook result received:', response);
+                
+                // Add the webhook result as an assistant message
+                addMessage('assistant', response.content, false);
+                
+                // Update research status to complete
+                if (isResearching) {
+                    updateResearchStatus({
+                        status: 'complete',
+                        message: `Research ${response.research_status || 'completed'}!`,
+                        progress_percentage: 100,
+                        current_step: 4,
+                        total_steps: 4
+                    });
+                    
+                    // Stop monitoring after a brief delay to show completion
+                    setTimeout(() => stopDeepResearchMonitoring(), 3000);
+                }
+                
+                // Scroll to show the new message
+                const messagesContainer = document.getElementById('messagesContainer');
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                
+            } else if (response.type === 'complete') {
+                showTyping(false);
+                finalizeCurrentMessage();
+                
+                // If we were waiting for clarification, clear that state
+                if (isWaitingForClarification) {
+                    isWaitingForClarification = false;
+                    removeClarificationPrompt();
+                }
+                
+                // For regular completions, stop deep research monitoring
+                // (webhook results will handle their own completion)
+                stopDeepResearchMonitoring();
+
+                // Update thread ID if provided
+                if (response.thread_id) {
+                    currentThreadId = response.thread_id;
+                }
+
+                // Refresh chat list to show updated activity
+                loadUserChats();
+
+                if (response.token_tracking) {
+                    showDebugInfo(response.token_tracking);
+                }
+            } else if (response.type === 'error') {
+                showTyping(false);
+                showError(response.message || 'An error occurred');
+                stopDeepResearchMonitoring();
+            }
+        }
+
+        // Deep Research Status Functions
+        function startDeepResearchMonitoring() {
+            if (researchPollingInterval) {
+                clearInterval(researchPollingInterval);
+            }
+            
+            isResearching = true;
+            updateResearchStatus('Initializing deep research...');
+            
+            // Update status indicator
+            const statusElement = document.getElementById('status');
+            statusElement.classList.add('researching');
+            statusElement.textContent = 'Deep Research Active';
+            
+            // Poll research status every 3 seconds
+            researchPollingInterval = setInterval(async () => {
+                if (currentThreadId) {
+                    await checkResearchStatus();
+                }
+            }, 3000);
+        }
+        
+        function stopDeepResearchMonitoring() {
+            if (researchPollingInterval) {
+                clearInterval(researchPollingInterval);
+                researchPollingInterval = null;
+            }
+            
+            isResearching = false;
+            
+            // Reset status indicator
+            const statusElement = document.getElementById('status');
+            statusElement.classList.remove('researching');
+            statusElement.textContent = isConnected ? 'Connected' : 'Disconnected';
+            
+            // Remove research status display
+            removeResearchStatusDisplay();
+        }
+        
+        async function checkResearchStatus() {
+            if (!currentThreadId || !isResearching) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/research/${currentThreadId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Research status:', data);
+                    
+                    if (data.status === 'success' && data.research_status) {
+                        const status = data.research_status;
+                        updateResearchStatus(status);
+                        
+                        // When research is complete, display the answer
+                        if (status.status === 'complete' && data.research && data.research.answer) {
+                            console.log('Research complete! Displaying answer...');
+                            
+                            // Add the completed research answer as an AI message
+                            const researchAnswer = data.research.answer;
+                            addMessage('assistant', researchAnswer, false);
+                            
+                            // Scroll to show the new message
+                            const messagesContainer = document.getElementById('messagesContainer');
+                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                            
+                            // Stop monitoring after showing the result
+                            setTimeout(() => stopDeepResearchMonitoring(), 2000);
+                        } else if (status.status === 'error') {
+                            // Handle error case
+                            showError('Research failed: ' + (status.message || 'Unknown error'));
+                            setTimeout(() => stopDeepResearchMonitoring(), 2000);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking research status:', error);
+            }
+        }
+        
+        function updateResearchStatus(status) {
+            let researchStatusDiv = document.getElementById('researchStatus');
+            
+            if (!researchStatusDiv) {
+                // Create research status display
+                const messagesContainer = document.getElementById('messagesContainer');
+                researchStatusDiv = document.createElement('div');
+                researchStatusDiv.id = 'researchStatus';
+                researchStatusDiv.className = 'research-status';
+                
+                // Insert before typing indicator
+                const typingIndicator = document.getElementById('typingIndicator');
+                messagesContainer.insertBefore(researchStatusDiv, typingIndicator);
+            }
+            
+            // Handle both legacy string format and new status object
+            let statusObj;
+            if (typeof status === 'string') {
+                // Legacy format - convert to object
+                statusObj = {
+                    status: 'researching',
+                    message: status,
+                    progress_percentage: 50,
+                    current_step: 2,
+                    total_steps: 4
+                };
+            } else {
+                statusObj = status;
+            }
+            
+            // Apply status-based styling
+            researchStatusDiv.className = 'research-status';
+            if (statusObj.status === 'complete') {
+                researchStatusDiv.className += ' research-complete';
+            } else if (statusObj.status === 'error') {
+                researchStatusDiv.className += ' research-error';
+            }
+            
+            // Create the ChatGPT-style progress UI
+            const iconSvg = statusObj.status === 'complete' ? '✅' : statusObj.status === 'error' ? '❌' : '🔍';
+            const title = statusObj.status === 'complete' ? 'Research Complete' : statusObj.status === 'error' ? 'Research Error' : 'Deep Research';
+            const subtitle = statusObj.status === 'complete' ? 'All findings have been compiled' : 'Searching the web for comprehensive information';
+            
+            researchStatusDiv.innerHTML = `
+                <div class="research-header">
+                    <div class="research-icon">${iconSvg}</div>
+                    <div class="research-title">${title}</div>
+                </div>
+                <div class="research-subtitle">${subtitle}</div>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${statusObj.progress_percentage || 0}%"></div>
+                    </div>
+                    <div class="progress-steps">
+                        <div class="progress-step ${statusObj.current_step >= 1 ? (statusObj.current_step === 1 ? 'active' : 'completed') : ''}">
+                            <div class="step-dot ${statusObj.current_step >= 1 ? (statusObj.current_step === 1 ? 'active' : 'completed') : ''}"></div>
+                            Planning
+                        </div>
+                        <div class="progress-step ${statusObj.current_step >= 2 ? (statusObj.current_step === 2 ? 'active' : 'completed') : ''}">
+                            <div class="step-dot ${statusObj.current_step >= 2 ? (statusObj.current_step === 2 ? 'active' : 'completed') : ''}"></div>
+                            Researching
+                        </div>
+                        <div class="progress-step ${statusObj.current_step >= 3 ? (statusObj.current_step === 3 ? 'active' : 'completed') : ''}">
+                            <div class="step-dot ${statusObj.current_step >= 3 ? (statusObj.current_step === 3 ? 'active' : 'completed') : ''}"></div>
+                            Synthesizing
+                        </div>
+                        <div class="progress-step ${statusObj.current_step >= 4 ? 'completed' : ''}">
+                            <div class="step-dot ${statusObj.current_step >= 4 ? 'completed' : ''}"></div>
+                            Complete
+                        </div>
+                    </div>
+                </div>
+                <div class="research-message">${statusObj.message || 'Processing...'}</div>
+            `;
+            
+            // Auto-scroll to keep status visible
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function removeResearchStatusDisplay() {
+            const researchStatusDiv = document.getElementById('researchStatus');
+            if (researchStatusDiv) {
+                researchStatusDiv.remove();
+            }
+        }
+        
+        function addClarificationPrompt() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            
+            // Create clarification prompt element
+            const clarificationDiv = document.createElement('div');
+            clarificationDiv.className = 'clarification-prompt';
+            clarificationDiv.id = 'clarificationPrompt';
+            clarificationDiv.innerHTML = `
+                <h4><span class="icon">💭</span>Clarification Needed</h4>
+                <p>I've asked some questions above to help me provide the most relevant research for your needs.</p>
+                <p><strong>Please respond with your preferences to continue the deep research.</strong></p>
+            `;
+            
+            // Insert before typing indicator
+            const typingIndicator = document.getElementById('typingIndicator');
+            messagesContainer.insertBefore(clarificationDiv, typingIndicator);
+            
+            // Auto-scroll to keep prompt visible
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        function removeClarificationPrompt() {
+            const clarificationDiv = document.getElementById('clarificationPrompt');
+            if (clarificationDiv) {
+                clarificationDiv.remove();
+            }
+        }
+
+        // Message Display Functions
+        function addMessage(sender, content, isPartial = false, sources = null) {
+            const messagesContainer = document.getElementById('messagesContainer');
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            if (isPartial) {
+                messageDiv.id = 'currentMessage';
+            }
+
+            const senderDiv = document.createElement('div');
+            senderDiv.className = 'message-sender';
+            senderDiv.textContent = sender === 'user' ? 'You' : 'AI';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            // Format message content with enhanced formatting for research responses
+            if (content && (content.includes('**') || content.includes('`https://') || content.includes('##'))) {
+                contentDiv.innerHTML = formatResearchContent(content, sources);
+            } else {
+                contentDiv.textContent = content;
+            }
+
+            messageDiv.appendChild(senderDiv);
+            messageDiv.appendChild(contentDiv);
+
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function updateCurrentMessage(content, sources = null) {
+            let currentMsg = document.getElementById('currentMessage');
+            if (!currentMsg) {
+                addMessage('assistant', content, true, sources);
+                currentMsg = document.getElementById('currentMessage');
+            } else {
+                const contentDiv = currentMsg.querySelector('.message-content');
+
+                // Format message content with enhanced formatting for research responses
+                if (content && (content.includes('**') || content.includes('`https://') || content.includes('##'))) {
+                    contentDiv.innerHTML = formatResearchContent(content, sources);
+                } else {
+                    contentDiv.textContent = content;
+                }
+            }
+
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function formatResearchContent(content, sources = null) {
+            // Comprehensive formatter for deep research and other enhanced content
+            let formattedContent = content;
+            
+            // Handle headings (## and ###)
+            formattedContent = formattedContent.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            formattedContent = formattedContent.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            
+            // Handle bold text
+            formattedContent = formattedContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Handle numbered lists (1. 2. etc.)
+            formattedContent = formattedContent.replace(/^(\d+\.)\s(.*)$/gim, '<li>$2</li>');
+            
+            // Handle bulleted lists (- or *)
+            formattedContent = formattedContent.replace(/^[-\*]\s(.*)$/gim, '<li>$1</li>');
+            
+            // Wrap consecutive list items
+            formattedContent = formattedContent.replace(/(<li>.*?<\/li>)(?:\s*<li>.*?<\/li>)*/gs, function(match) {
+                return '<ul>' + match + '</ul>';
+            });
+            
+            // Extract URLs and create clickable links
+            const urlRegex = /`(https?:\/\/[^`\s]+)`/g;
+            const urls = [];
+            let match;
+
+            while ((match = urlRegex.exec(content)) !== null) {
+                urls.push(match[1]);
+            }
+
+            // Replace backtick URLs with actual links
+            formattedContent = formattedContent.replace(urlRegex, '<a href="$1" target="_blank" class="web-search-url">$1</a>');
+            
+            // Handle code blocks with backticks
+            formattedContent = formattedContent.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // Handle line breaks properly
+            formattedContent = formattedContent.replace(/\n\n/g, '</p><p>');
+            formattedContent = '<p>' + formattedContent + '</p>';
+            
+            // Clean up empty paragraphs
+            formattedContent = formattedContent.replace(/<p><\/p>/g, '');
+            formattedContent = formattedContent.replace(/<p>\s*<\/p>/g, '');
+            
+            // Fix headings inside paragraphs
+            formattedContent = formattedContent.replace(/<p>(<h[23]>.*?<\/h[23]>)<\/p>/g, '$1');
+            formattedContent = formattedContent.replace(/<p>(<ul>.*?<\/ul>)<\/p>/gs, '$1');
+
+            // Add sources section if we have URLs
+            if (urls.length > 0) {
+                let sourcesHtml = '<div class="web-sources">';
+                sourcesHtml += '<div class="web-sources-title">Sources:</div>';
+
+                urls.forEach((url, index) => {
+                    try {
+                        const domain = new URL(url).hostname;
+                        sourcesHtml += `<a href="${url}" target="_blank" class="web-source-link">[${index + 1}] ${domain}</a>`;
+                    } catch (e) {
+                        // Handle invalid URLs gracefully
+                        sourcesHtml += `<a href="${url}" target="_blank" class="web-source-link">[${index + 1}] ${url}</a>`;
+                    }
+                });
+
+                sourcesHtml += '</div>';
+                formattedContent += sourcesHtml;
+            }
+
+            return formattedContent;
+        }
+        
+        function formatWebSearchContent(content, sources = null) {
+            // Legacy function - now delegates to formatResearchContent for consistency
+            return formatResearchContent(content, sources);
+        }
+
+        function finalizeCurrentMessage() {
+            const currentMsg = document.getElementById('currentMessage');
+            if (currentMsg) {
+                currentMsg.removeAttribute('id');
+            }
+        }
+
+        function showTyping(show) {
+            const typingIndicator = document.getElementById('typingIndicator');
+            typingIndicator.style.display = show ? 'block' : 'none';
+
+            if (show) {
+                const messagesContainer = document.getElementById('messagesContainer');
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+
+        function showError(message) {
+            const messagesContainer = document.getElementById('messagesContainer');
+
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = `Error: ${message}`;
+
+            messagesContainer.appendChild(errorDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function showDebugInfo(tokenInfo) {
+            const debugDiv = document.getElementById('debugInfo');
+            const detailsDiv = document.getElementById('debugDetails');
+
+            detailsDiv.innerHTML = `
+                Request: ${tokenInfo.last_request_tokens || 0} tokens<br>
+                Total: ${tokenInfo.total_tokens || 0} tokens<br>
+                Model: ${tokenInfo.model || 'unknown'}
+            `;
+
+            debugDiv.style.display = 'block';
+
+            setTimeout(() => {
+                debugDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Manual test function for completed research
+        async function testCompletedResearch(threadId = '12b1e662-3c58-46fa-9984-d5d3c709155d') {
+            try {
+                const response = await fetch(`${API_BASE}/api/research/${threadId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Test research data:', data);
+                    
+                    if (data.status === 'success' && data.research && data.research.answer) {
+                        console.log('Displaying completed research answer...');
+                        addMessage('assistant', data.research.answer, false);
+                        
+                        // Scroll to show the new message
+                        const messagesContainer = document.getElementById('messagesContainer');
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    } else {
+                        console.log('No completed research found for thread:', threadId);
+                    }
+                } else {
+                    console.error('Failed to fetch research data:', response.status);
+                }
+            } catch (error) {
+                console.error('Error testing completed research:', error);
+            }
+        }
+
+        // Utility Functions
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showError(message) {
+            alert(message); // Simple alert for now, can be enhanced with better UI
+        }
+    </script>
+</body>
+
+</html>
