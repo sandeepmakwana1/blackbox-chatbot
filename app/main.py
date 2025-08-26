@@ -59,7 +59,7 @@ service = ChatService()
 chat_manager = ChatManager()
 websocket_manager = WebSocketConnectionManager()
 
-@app.websocket("/{user_id}/{thread_id}")
+@app.websocket("/ws/{user_id}/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str):
     """Enhanced WebSocket endpoint with immediate thread binding."""
     await websocket.accept()
