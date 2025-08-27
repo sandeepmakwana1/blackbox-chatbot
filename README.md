@@ -1,220 +1,356 @@
+# Real-Time Chat Application with LangGraph and Deep Research
 
-## Features
+A sophisticated real-time chat application built with FastAPI, WebSockets, PostgreSQL, and LangGraph that supports multi-tenant chat management, deep research capabilities, OpenAI integration, and comprehensive conversation state management.
 
-- ✅ **Real-time Chat** via WebSocket
-- ✅ **Conversation History** with PostgreSQL persistence
-- ✅ **Auto-renaming** chats based on first message
-- ✅ **Token Tracking** for OpenAI usage
-- ✅ **Summarization** of long conversations
-- ✅ **Multi-language Support**
-- ✅ **Clean Architecture** with proper separation of concerns
+## 🎯 Features
 
+### Core Features
+- **Real-time Chat**: WebSocket-based bidirectional communication
+- **Multi-tenant Support**: User and thread-based conversation management
+- **Conversation Types**: Standard chat, web search, deep research, document Q&A
+- **State Management**: LangGraph-powered conversation orchestration
+- **Summarization**: Automatic conversation summarization for long histories
+- **Token Tracking**: Comprehensive OpenAI token usage monitoring
 
-## Quick Start
+### Advanced Capabilities
+- **Deep Research**: Background research execution with OpenAI's response API
+- **Web Integration**: Built-in web search functionality
+- **Multi-language Support**: English, Spanish, French, German, Chinese
+- **Connection Pooling**: Efficient PostgreSQL connection management
+- **Error Handling**: Robust error handling and graceful degradation
+- **Webhook Processing**: OpenAI deep research result handling
 
-### 1. Environment Setup
+## 🏗️ Architecture
 
-Create a `.env` file:
+### System Architecture
 
-```bash
-# Application
-APP_NAME="Senior Chat App"
-APP_VERSION="1.0.0"
-DEBUG=false
+```mermaid
+graph TB
+    %% Frontend Layer
+    subgraph Frontend
+        UI[Web Interface - simple_chat.html]
+        WS_FE[WebSocket Client]
+    end
 
-# Server
-HOST=0.0.0.0
-PORT=8000
+    %% API Gateway Layer
+    subgraph API_Gateway[FastAPI Application - main.py]
+        REST_API[REST Endpoints]
+        WS_API[WebSocket Endpoints]
+        Chat_Mgr[Chat Manager - chat_manager.py]
+        WS_Mgr[WebSocket Manager - websocket_manager.py]
+    end
 
-# Database
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=your_password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_DB=chat_app
+    %% Core Services Layer
+    subgraph Core_Services
+        Chat_Service[Chat Service - utils.py]
+        Graph_Builder[Graph Builder - graph_builder.py]
+        Summary_Agent[Summary Agent - summary_agent.py]
+    end
 
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
+    %% Conversation Processing Layer
+    subgraph Conversation_Processing
+        Standard_Nodes[Nodes - nodes.py]
+        Research_Nodes[Deep Research Nodes - deep_research.py]
+        Graph[LangGraph State Machine]
+    end
 
-# Models
-CHAT_MODEL=gpt-4o-mini
-SUMMARIZE_MODEL=gpt-4o-mini
-EMBEDDINGS_MODEL=text-embedding-3-small
+    %% Data Layer
+    subgraph Data_Layer
+        PostgresDB[PostgreSQL Database]
+        JSON_Store[Data Store - store.py/data.json]
+    end
 
-# Settings
-SUMMARY_TRIGGER_COUNT=5
-MAX_TITLE_LENGTH=50
+    %% External Services
+    subgraph External_Services
+        OpenAI_API[OpenAI API & Webhooks]
+    end
 
-# CORS
-CORS_ORIGINS=["http://localhost:3000", "http://localhost:8080"]
+    %% Connections
+    UI --> WS_FE
+    WS_FE --> WS_API
+    UI --> REST_API
+    
+    REST_API --> Chat_Mgr
+    WS_API --> WS_Mgr
+    
+    Chat_Mgr --> PostgresDB
+    Chat_Mgr --> Chat_Service
+    
+    Chat_Service --> Graph_Builder
+    Chat_Service --> Summary_Agent
+    
+    Graph_Builder --> Standard_Nodes
+    Graph_Builder --> Research_Nodes
+    
+    Standard_Nodes --> Graph
+    Research_Nodes --> Graph
+    
+    Graph --> OpenAI_API
+    Research_Nodes --> JSON_Store
+    JSON_Store --> JSON_Store
+    
+    OpenAI_API --> WS_API[Webhook Callbacks]
 ```
 
-### 2. Database Setup
+### Conversation Flow
 
-Start PostgreSQL with Docker:
-
-```bash
-docker-compose up -d
+```mermaid
+flowchart TD
+    Start[User Message] --> RouteType{Conversation Type}
+    
+    RouteType -->|Standard Chat| SummarizeCheck{Check Summarization}
+    RouteType -->|Deep Research| Planning[Research Planning Node]
+    
+    SummarizeCheck -->|Summarize Needed| Summarize[Summarization Node]
+    SummarizeCheck -->|No Summarize| Chat[Chat Node]
+    
+    Summarize --> Chat
+    Chat --> End[Response]
+    
+    Planning --> ClarifyCheck{Clarification Needed?}
+    ClarifyCheck -->|Yes| WaitUser[Wait for User Input]
+    ClarifyCheck -->|No| Generate[Generate Research Plan]
+    
+    WaitUser --> Generate
+    Generate --> Execute[Execute Research]
+    Execute --> Complete[Complete Research]
 ```
 
-### 3. Install Dependencies
+## 📦 Project Structure
 
+```
+app/
+├── __init__.py                 # Package initialization
+├── main.py                     # FastAPI application and endpoints
+├── config.py                   # Environment configuration and model settings
+├── chat_manager.py             # PostgreSQL-based chat management
+├── websocket_manager.py        # WebSocket connection management
+├── utils.py                    # Core ChatService orchestrator
+├── schema.py                   # Conversation state definitions
+├── nodes.py                    # Standard conversation nodes
+├── deep_research.py           # Deep research nodes and utilities
+├── graph_builder.py           # Conversation graph building
+├── helper.py                   # Utility functions and error handling
+├── prompt.py                   # AI prompt templates
+├── summary_agent.py           # Conversation summarization
+├── store.py                    # JSON data store for research tracking
+└── data.json                   # Research data storage
+
+ui/
+└── simple_chat.html           # Web interface
+
+docker-compose.yml             # PostgreSQL container configuration
+requirements.txt               # Python dependencies
+README.md                      # This documentation
+notes.md                       # Development notes
+```
+
+## 🔧 Key Components
+
+### 1. FastAPI Application (`main.py`)
+- REST API endpoints for chat management
+- WebSocket endpoints for real-time communication
+- OpenAI webhook processing for deep research results
+- Multi-tenant support with user/thread isolation
+
+### 2. PostgreSQL Chat Manager (`chat_manager.py`)
+- Connection pooling with retry logic
+- Thread-based conversation storage
+- User management and chat history
+- Atomic operations with transaction support
+
+### 3. WebSocket Manager (`websocket_manager.py`)
+- Real-time message broadcasting
+- Connection state management
+- Error handling and reconnection logic
+
+### 4. LangGraph Integration (`utils.py`, `graph_builder.py`)
+- State machine conversation orchestration
+- Multiple conversation type support
+- Automatic summarization triggers
+- Token usage tracking
+
+### 5. Deep Research Module (`deep_research.py`)
+- Research planning and clarification
+- Background research execution
+- OpenAI response API integration
+- Research status tracking and monitoring
+
+### 6. Frontend Interface (`ui/simple_chat.html`)
+- Real-time messaging interface
+- Research progress monitoring
+- Multi-conversation management
+- Responsive design with status indicators
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.9+
+- PostgreSQL 12+
+- OpenAI API key
+- Docker (for containerized PostgreSQL)
+
+### Installation
 ```bash
+# Clone and setup
+git clone <repository>
+cd <project-directory>
 pip install -r requirements.txt
+
+# Environment configuration
+cp .env.example .env
+# Edit .env with your OpenAI API key and database settings
+
+# Start PostgreSQL with Docker
+docker-compose up -d
+
+# Run the application
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 4. Run the Application
+### Access the Application
+- Web Interface: http://localhost:8000/ui
+- API Documentation: http://localhost:8000/docs
+- WebSocket Endpoint: ws://localhost:8000/ws/{user_id}/{thread_id}
 
-```bash
-# Development mode
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production mode
-uvicorn src.main:app --host 0.0.0.0 --port 8000
-```
-
-## API Documentation
-
-### REST Endpoints
-
-- **GET** `/api/chats/{user_id}` - Get user's chats
-- **POST** `/api/chats/{user_id}` - Create new chat
-- **PUT** `/api/chats/{user_id}/{thread_id}/rename` - Rename chat
-- **DELETE** `/api/chats/{user_id}/{thread_id}` - Delete chat
-- **GET** `/api/chats/{user_id}/{thread_id}` - Get chat details
-
-### WebSocket Endpoints
-
-- **WebSocket** `/ws/chat` - Real-time chat endpoint
-- **WebSocket** `/ws/health` - Health check endpoint
-
-### Health Checks
-
-- **GET** `/api/health` - General health check
-- **GET** `/api/health/ready` - Readiness probe
-- **GET** `/api/health/live` - Liveness probe
-
-## Development
-
-### Code Quality
-
-```bash
-# Format code
-black src/
-
-# Sort imports
-isort src/
-
-# Lint
-flake8 src/
-
-# Type checking
-mypy src/
-
-# Run tests
-pytest tests/
-```
-
-### Testing
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src tests/
-
-# Run specific test file
-pytest tests/unit/test_chat_service.py
-```
-
-### Database Migrations
-
-```bash
-# Create migration
-alembic revision --autogenerate -m "description"
-
-# Apply migrations
-alembic upgrade head
-
-# Downgrade migration
-alembic downgrade -1
-```
-
-## Architecture Decisions
-
-### 1. Layered Architecture
-- **API Layer**: REST endpoints and WebSocket handlers
-- **Service Layer**: Business logic and orchestration
-- **Repository Layer**: Data access and persistence
-- **Domain Layer**: Core business models and rules
-
-### 2. Dependency Injection
-- Services are injected into routes
-- Repositories are injected into services
-- Easy testing with mock implementations
-
-### 3. Async/Await
-- All I/O operations are async
-- PostgreSQL with asyncpg
-- WebSocket handling with asyncio
-
-### 4. Error Handling
-- Centralized error handling middleware
-- Consistent error response format
-- Proper logging at all levels
-
-### 5. Configuration Management
-- Environment-based configuration
-- Type-safe settings with Pydantic
-- Easy deployment across environments
-
-## Production Considerations
+## ⚙️ Configuration
 
 ### Environment Variables
-
 ```bash
-# Production database
-POSTGRES_HOST=your-prod-db-host
-POSTGRES_PASSWORD=your-secure-password
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_WEBHOOK_SECRET=your_webhook_secret
+OPENAI_RESPONSE_MODEL=gpt-4
 
-# Production OpenAI
-OPENAI_API_KEY=your-production-key
+# Database Configuration
+DATABASE_URL=postgresql://user:password@localhost:5432/chatdb
+DB_MAX_CONNECTIONS=20
+DB_POOL_TIMEOUT=30
 
-# Security
-DEBUG=false
-CORS_ORIGINS=["https://yourdomain.com"]
+# Application Settings
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
 ```
 
-### Docker Deployment
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY src/ ./src/
-
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+### Model Configuration
+```python
+# Default model settings in config.py
+DEFAULT_MODELS = {
+    "chat": "gpt-4-1106-preview",
+    "summarize": "gpt-3.5-turbo",
+    "research_plain": "gpt-4-1106-preview"
+}
 ```
 
-### Monitoring
+## 📋 API Documentation
 
-- Health check endpoints for load balancers
-- Prometheus metrics (optional)
-- Structured logging with correlation IDs
+### REST Endpoints
+- `GET /api/chats/{user_id}` - List user chats
+- `POST /api/chats/{user_id}` - Create new chat
+- `PUT /api/chats/{user_id}/{thread_id}` - Update chat title
+- `DELETE /api/chats/{user_id}/{thread_id}` - Delete chat
+- `GET /conversation/{user_id}/{thread_id}` - Get conversation messages
+- `GET /api/research/{thread_id}` - Get research status
 
-## Contributing
+### WebSocket Protocol
+- Endpoint: `ws://localhost:8000/ws/{user_id}/{thread_id}`
+- Message format: JSON with `type`, `message`, `thread_id`, `language`
+- Response types: `start`, `chunk`, `complete`, `error`, `research_initiated`, `webhook_result`
 
-1. Follow the established architecture patterns
-2. Write tests for new features
-3. Update documentation
-4. Use the provided code quality tools
-5. Follow semantic versioning
+## 🔍 Deep Research Workflow
 
-## License
+### Research Process
+1. **Planning**: Ask clarifying questions to scope research
+2. **Prompt Generation**: Create detailed research instructions
+3. **Execution**: Submit to OpenAI's response API
+4. **Background Processing**: Monitor research progress
+5. **Completion**: Process results via webhook
 
-MIT License - see LICENSE file for details.
+### Research Status Tracking
+- Real-time progress monitoring
+- Multi-step progress indication
+- Error handling and retry logic
+- Results storage in JSON database
+
+## 🛠️ Development
+
+### Adding New Conversation Types
+1. Extend `graph_builder.py` with new graph configuration
+2. Add nodes in appropriate module (`nodes.py` or new file)
+3. Update conversation type routing in `utils.py`
+4. Add prompt templates in `prompt.py`
+
+### Customizing Prompts
+Edit `app/prompt.py` to modify:
+- Chat conversation style
+- Summarization format
+- Research planning questions
+- Research instruction generation
+
+### Monitoring and Debugging
+- Built-in token tracking
+- Conversation state inspection
+- WebSocket connection status
+- Research progress monitoring
+
+## 🚨 Troubleshooting
+
+### Common Issues
+- **Database connection errors**: Check PostgreSQL is running and DATABASE_URL is correct
+- **OpenAI API errors**: Verify OPENAI_API_KEY is set and valid
+- **WebSocket connection issues**: Check CORS settings and network connectivity
+- **Research not starting**: Verify OPENAI_WEBHOOK_SECRET is configured
+
+### Debug Mode
+Enable debug mode for detailed logging:
+```bash
+export DEBUG=true
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## 📊 Monitoring
+
+### Built-in Monitoring
+- Token usage tracking per conversation
+- Database connection health
+- WebSocket connection status
+- Research task monitoring
+
+### Logging
+Application logs include:
+- API request/response details
+- WebSocket connection events
+- OpenAI API interactions
+- Database operations
+- Research task status updates
+
+## 🤝 Contributing
+
+### Development Setup
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+### Code Style
+- Follow PEP 8 guidelines
+- Use type hints where appropriate
+- Include docstrings for public methods
+- Write tests for new functionality
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🙏 Acknowledgments
+
+- FastAPI team for the excellent web framework
+- LangChain/LangGraph for conversation orchestration
+- OpenAI for AI model integration
+- PostgreSQL for reliable data storage
+
+---
+
+**Note**: This application is designed for production use with proper security measures. Always secure your API keys and database credentials in production environments.

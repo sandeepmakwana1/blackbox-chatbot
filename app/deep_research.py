@@ -150,7 +150,7 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     LOGGER.info(f"Generated enhanced research plan for query: {query[:100]}...")
     return {
         "research_plan": response.content,
-        "messages": [AIMessage(content="Research plan generated. Proceeding with execution...")]
+        # "messages": [AIMessage(content="Research plan generated. Proceeding with execution...")]
     }
 
 
@@ -236,7 +236,18 @@ async def deep_research_run_node(state: ConversationState) -> Dict:
         add_record(record)
 
         LOGGER.info(f"Deep research initiated for thread {state.get('thread_id')}")
-        return {"messages": [AIMessage(content="Executing your deepresearch...")]}
+        
+        # Create a message that will trigger frontend research monitoring
+        # research_message = AIMessage(
+        #     content="Research plan generated and Send to the Deep research service for execution"
+        # )
+        
+        # Return both the message and the flag so it appears in streaming
+        return {
+            # "messages": [research_message],
+            "research_initiated": True,  # Flag to indicate research has started
+            "tokens": state.get("tokens", {})  # Preserve token tracking
+        }
 
     except Exception as e:
         LOGGER.error(f"Error in deep_research_run_node: {e}")
@@ -317,16 +328,15 @@ def close_deep_research(state: ConversationState) -> Dict:
     """
     research_plan = state.get("research_plan", "")
     
-    if research_plan:
-        content = "Please Wait for Deep Research to Complete it will take a while."
-    else:
+    if not research_plan:
         content = (
             "Deep Research session ended. "
             "You can switch to regular chat mode or start a new deep research task."
         )
     
-    response = AIMessage(content=content)
-    return {"messages": [response]}
+        response = AIMessage(content=content)
+        return {"messages": [response]}
+    return {}
 
 
 def rejected_node(state: ConversationState) -> Dict:

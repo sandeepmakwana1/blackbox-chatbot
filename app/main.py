@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from langgraph.types import interrupt, Command
+from app.config import OPENAI_WEBHOOK_SECRET
 
 class ChatCreateRequest(BaseModel):
     title: Optional[str] = None
@@ -59,19 +59,25 @@ service = ChatService()
 chat_manager = ChatManager()
 websocket_manager = WebSocketConnectionManager()
 
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
+@app.websocket("/ws/{user_id}/{thread_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str):
+    """Enhanced WebSocket endpoint with immediate thread binding."""
     await websocket.accept()
-    current_thread_id = None
     
-    # Send initial connection message to get thread_id immediately
-    initial_message = {
-        "type": "connection_established",
-        "message": "Please send your thread_id to enable real-time notifications",
-        "user_id": user_id
-    }
-    await websocket.send_text(json.dumps(initial_message))
+    # Immediate registration with provided thread_id
+    if not thread_id or thread_id == "default":
+        thread_id = chat_manager.get_or_create_default_chat(user_id)
     
+    # Ensure the chat exists in our metadata (create if missing)
+    existing_chat = chat_manager.get_chat(user_id, thread_id)
+    if not existing_chat:
+        chat_manager.create_chat(user_id, "", "chat")
+    
+    # Register WebSocket connection immediately
+    await websocket_manager.add_connection(thread_id, user_id, websocket)
+    current_thread_id = thread_id
+    LOGGER.info(f"[WS] Registered user {user_id} to thread {thread_id}")
+
     try:
         while True:
             raw = await websocket.receive_text()
@@ -79,42 +85,32 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
             user_message = payload.get("message", "")
             conversation_type = payload.get("type", "chat")
-            thread_id = payload.get("thread_id")
+            requested_thread_id = payload.get("thread_id")
             language = payload.get("language", "English")
             
-            # Check if this is just a thread registration message
-            is_register_only = payload.get("action") == "register" or user_message == ""
-            
-            # If no thread_id provided, get or create a default chat
-            if not thread_id:
-                thread_id = chat_manager.get_or_create_default_chat(user_id)
-            
-            # Register WebSocket connection for this thread (if thread changed)
-            if current_thread_id != thread_id:
-                # Remove connection from previous thread if exists
-                if current_thread_id:
-                    await websocket_manager.remove_connection(current_thread_id, user_id)
+            # Allow thread switching if client provides different thread_id
+            if requested_thread_id and requested_thread_id != current_thread_id:
+                # Remove connection from current thread
+                await websocket_manager.remove_connection(current_thread_id, user_id)
                 
-                # Add connection to current thread
+                # Add connection to new thread
+                thread_id = requested_thread_id
                 await websocket_manager.add_connection(thread_id, user_id, websocket)
                 current_thread_id = thread_id
-                LOGGER.info(f"WebSocket registered to thread {thread_id} for user {user_id}")
-            
-            # If this is just a registration message, send confirmation and continue
-            if is_register_only:
-                registration_response = {
-                    "type": "registration_confirmed",
-                    "thread_id": thread_id,
-                    "user_id": user_id,
-                    "message": "WebSocket registered for real-time notifications"
-                }
-                await websocket.send_text(json.dumps(registration_response))
+                LOGGER.info(f"[WS] Thread switched to {thread_id} for user {user_id}")
+                
+                # Ensure new chat exists
+                existing_chat = chat_manager.get_chat(user_id, thread_id)
+                if not existing_chat:
+                    chat_manager.create_chat(user_id, "", conversation_type)
+
+            # Skip empty messages
+            if not user_message.strip():
                 continue
-            
+
             # Ensure the chat exists in our metadata
             existing_chat = chat_manager.get_chat(user_id, thread_id)
             if not existing_chat:
-                # Create chat metadata if it doesn't exist (for backward compatibility)
                 chat_manager.create_chat(user_id, user_message, conversation_type)
 
             # Process the message with streaming
@@ -126,52 +122,48 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 conversation_type=conversation_type
             ):
                 await websocket.send_text(json.dumps(chunk))
-            
-            # Get current chat state before updating activity
-            chat = chat_manager.get_chat(user_id, thread_id)            
-            # Update chat activity in metadata after streaming is complete
+
+            # Get current chat state and update activity
+            chat = chat_manager.get_chat(user_id, thread_id)
             chat_manager.update_chat_activity(user_id, thread_id, user_message)
-            
+
             # Auto-rename chat after first message if it has generic title
             if chat and chat['title'] in ['New Chat', '', 'string']:
                 new_title = chat_manager.generate_title_from_message(user_message)
                 chat_manager.rename_chat(user_id, thread_id, new_title)
 
     except WebSocketDisconnect:
-        LOGGER.info("WebSocket disconnected: user=%s", user_id)
+        LOGGER.info("WebSocket disconnected: user=%s thread=%s", user_id, current_thread_id)
     except json.JSONDecodeError as e:
         LOGGER.warning(f"Invalid JSON received from user {user_id}: {e}")
         try:
             await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON format"}))
-        except:
+        except Exception:
             pass
     except KeyError as e:
         LOGGER.warning(f"Missing required field in message from user {user_id}: {e}")
         try:
             await websocket.send_text(json.dumps({"type": "error", "message": f"Missing required field: {str(e)}"}))
-        except:
+        except Exception:
             pass
-    except Exception as exc:
+    except Exception:
         LOGGER.exception(f"WebSocket error for user {user_id}")
         try:
-            # Send a generic error message to avoid exposing internal details
             error_message = "An internal error occurred. Please try again."
             await websocket.send_text(json.dumps({"type": "error", "message": error_message}))
-        except:
-            # If we can't send the error message, just log it
+        except Exception:
             LOGGER.error(f"Failed to send error message to user {user_id}")
     finally:
-        # Clean up WebSocket connection
         if current_thread_id:
             await websocket_manager.remove_connection(current_thread_id, user_id)
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
 
 
 client = OpenAI(
-    webhook_secret="whsec_0hZag1qEAm++5Qr8OqPkJ37a929haN/oeaTo0gFtzkQ=",
+    webhook_secret=OPENAI_WEBHOOK_SECRET,
 )
 
 

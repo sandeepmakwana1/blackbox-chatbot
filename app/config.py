@@ -34,8 +34,8 @@ POSTGRES_PORT=os.getenv("POSTGRES_PORT")
 
 # Deep Research Configuration
 CONV_TYPE_DEEP_RESEARCH = "deep-research"
-OPENAI_WEBHOOK_SECRET = os.getenv("OPENAI_WEBHOOK_SECRET", "whsec_0hZag1qEAm++5Qr8OqPkJ37a929haN/oeaTo0gFtzkQ=")
+OPENAI_WEBHOOK_SECRET = os.getenv("OPENAI_WEBHOOK_SECRET")
+if not OPENAI_WEBHOOK_SECRET:
+    raise RuntimeError("OPENAI_WEBHOOK_SECRET is not set. Export it before starting the app.")
+
 OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "o4-mini")
-
-
-
