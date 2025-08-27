@@ -53,7 +53,7 @@ def add_record(record: Dict[str, Any]) -> None:
     data = load_data()
     data.append(record)
     save_data(data)
-    print(f"✅ Record added: {record}")
+    print(f"Record added: {record}")
 
 
 def update_record(record_id: str, updates: Dict[str, Any]) -> bool:
@@ -63,9 +63,9 @@ def update_record(record_id: str, updates: Dict[str, Any]) -> bool:
         if item.get("thread_id") == record_id:
             item.update(updates)
             save_data(data)
-            print(f"✏️ Record {record_id} updated with {updates}")
+            print(f"Record {record_id} updated with {updates}")
             return True
-    print(f"⚠️ Record {record_id} not found.")
+    print(f"Record {record_id} not found.")
     return False
 
 
@@ -75,10 +75,10 @@ def delete_record(record_id: str) -> bool:
     new_data = [item for item in data if item.get("thread_id") != record_id]
     if len(new_data) != len(data):
         save_data(new_data)
-        print(f"🗑️ Record {record_id} deleted.")
+        print(f"Record {record_id} deleted.")
         return True
     else:
-        print(f"⚠️ Record {record_id} not found.")
+        print(f"Record {record_id} not found.")
         return False
 
 
@@ -87,9 +87,6 @@ def get_all_records() -> List[Dict[str, Any]]:
     return load_data()
 
 
-# -------------------------
-# Example usage
-# -------------------------
 if __name__ == "__main__":
     # Add records
     add_record({"thread_id": 1, "name": "Alice", "age": 25})
@@ -102,4 +99,4 @@ if __name__ == "__main__":
     delete_record(2)
 
     # Show current data
-    print("📂 Final JSON:", load_data())
+    print("Final JSON:", load_data())
