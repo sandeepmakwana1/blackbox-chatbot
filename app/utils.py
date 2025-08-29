@@ -281,30 +281,21 @@ class ChatService:
                                     if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                         content_str = serialize_content_to_string(msg.content)
                                         
-                                        # # Check if this is the research initiation message during resume (only send once)
-                                        # if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
-                                        #     # Send research_initiated notification BEFORE streaming the message
-                                        #     yield {
-                                        #         "type": "research_initiated",
-                                        #         "content": "Deep research has been initiated and is running in the background.",
-                                        #         "thread_id": thread_id
-                                        #     }
-                                        #     research_initiated_sent = True  # Mark as sent to prevent duplicates
-                                        #     LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (resume flow)")
-                                        
                                         if content_str and len(content_str) > len(full_response):
                                             new_content = content_str[len(full_response):]
                                             full_response = content_str
                                             
                                             if new_content.strip():
+                                                # yield {"type": "chunk", "content": content_str}
                                                 # Simulate streaming by breaking content into words
                                                 words = new_content.split()
                                                 for i, word in enumerate(words):
                                                     if i == 0:
                                                         yield {"type": "chunk", "content": word}
+                                                    elif '-' in word:
+                                                        yield {"type": "chunk", "content": "\n" + word}
                                                     else:
                                                         yield {"type": "chunk", "content": " " + word}
-                                                yield {"type": "chunk", "content": "\n"}
                                 
                                 existing_messages_count = len(messages)
                             
@@ -390,17 +381,6 @@ class ChatService:
                             if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                 content_str = serialize_content_to_string(msg.content)
                                 
-                                # Check if this is the research initiation message (only send once)
-                                if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
-                                    # Send research_initiated notification BEFORE streaming the message
-                                    yield {
-                                        "type": "research_initiated",
-                                        "content": "Deep research has been initiated and is running in the background.",
-                                        "thread_id": thread_id
-                                    }
-                                    research_initiated_sent = True  # Mark as sent to prevent duplicates
-                                    LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (message detection)")
-                                
                                 # Calculate the new content delta
                                 if content_str and len(content_str) > len(full_response):
                                     new_content = content_str[len(full_response):]
@@ -412,6 +392,8 @@ class ChatService:
                                         for i, word in enumerate(words):
                                             if i == 0:
                                                 yield {"type": "chunk", "content": word}
+                                            elif "-" in word:
+                                                yield {"type": "chunk", "content": "\n" + word}
                                             else:
                                                 yield {"type": "chunk", "content": " " + word}
                         
