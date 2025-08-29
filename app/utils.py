@@ -281,6 +281,11 @@ class ChatService:
                                     if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                         content_str = serialize_content_to_string(msg.content)
                                         
+                                        # Check if this is the research initiation message during resume (only send once)
+                                        if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
+                                        
+                                            research_initiated_sent = True 
+                                        
                                         if content_str and len(content_str) > len(full_response):
                                             new_content = content_str[len(full_response):]
                                             full_response = content_str
@@ -380,6 +385,9 @@ class ChatService:
                             # Process AIMessage content
                             if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                 content_str = serialize_content_to_string(msg.content)
+                                
+                                if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
+                                    research_initiated_sent = True  # Mark as sent to prevent duplicates
                                 
                                 # Calculate the new content delta
                                 if content_str and len(content_str) > len(full_response):
