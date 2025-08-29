@@ -281,16 +281,16 @@ class ChatService:
                                     if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                         content_str = serialize_content_to_string(msg.content)
                                         
-                                        # Check if this is the research initiation message during resume (only send once)
-                                        if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
-                                            # Send research_initiated notification BEFORE streaming the message
-                                            yield {
-                                                "type": "research_initiated",
-                                                "content": "Deep research has been initiated and is running in the background.",
-                                                "thread_id": thread_id
-                                            }
-                                            research_initiated_sent = True  # Mark as sent to prevent duplicates
-                                            LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (resume flow)")
+                                        # # Check if this is the research initiation message during resume (only send once)
+                                        # if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
+                                        #     # Send research_initiated notification BEFORE streaming the message
+                                        #     yield {
+                                        #         "type": "research_initiated",
+                                        #         "content": "Deep research has been initiated and is running in the background.",
+                                        #         "thread_id": thread_id
+                                        #     }
+                                        #     research_initiated_sent = True  # Mark as sent to prevent duplicates
+                                        #     LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (resume flow)")
                                         
                                         if content_str and len(content_str) > len(full_response):
                                             new_content = content_str[len(full_response):]
@@ -304,6 +304,7 @@ class ChatService:
                                                         yield {"type": "chunk", "content": word}
                                                     else:
                                                         yield {"type": "chunk", "content": " " + word}
+                                                yield {"type": "chunk", "content": "\n"}
                                 
                                 existing_messages_count = len(messages)
                             
@@ -373,8 +374,7 @@ class ChatService:
                 async for chunk in self.app.astream(initial_state, config, stream_mode="values"):
                     # Extract messages from the chunk
                     messages = chunk.get("messages", [])
-                    # print(messages, "=======<>", type(messages))
-                    if last_sent_index ==1 and len(messages) > 1:
+                    if last_sent_index == 1 and len(messages) > 1:
                         last_sent_index = len(messages) - 1
                     # Only process new messages that haven't been sent yet
                     if messages and len(messages) > last_sent_index:
