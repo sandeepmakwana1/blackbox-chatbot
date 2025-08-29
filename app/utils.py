@@ -236,6 +236,9 @@ class ChatService:
         config = {"configurable": {"thread_id": thread_id}}
         
         # Get existing state to preserve token tracking and check for interrupts
+        existing_state = None
+        existing_tokens = {"total_tokens": 0}
+        
         try:
             existing_state = await self.app.aget_state(config)
             existing_tokens = existing_state.values.get("tokens", {"total_tokens": 0})
@@ -278,27 +281,19 @@ class ChatService:
                                     if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                         content_str = serialize_content_to_string(msg.content)
                                         
-                                        # Check if this is the research initiation message during resume (only send once)
-                                        if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
-                                            # Send research_initiated notification BEFORE streaming the message
-                                            yield {
-                                                "type": "research_initiated",
-                                                "content": "Deep research has been initiated and is running in the background.",
-                                                "thread_id": thread_id
-                                            }
-                                            research_initiated_sent = True  # Mark as sent to prevent duplicates
-                                            LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (resume flow)")
-                                        
                                         if content_str and len(content_str) > len(full_response):
                                             new_content = content_str[len(full_response):]
                                             full_response = content_str
                                             
                                             if new_content.strip():
+                                                # yield {"type": "chunk", "content": content_str}
                                                 # Simulate streaming by breaking content into words
                                                 words = new_content.split()
                                                 for i, word in enumerate(words):
                                                     if i == 0:
                                                         yield {"type": "chunk", "content": word}
+                                                    elif '-' in word:
+                                                        yield {"type": "chunk", "content": "\n" + word}
                                                     else:
                                                         yield {"type": "chunk", "content": " " + word}
                                 
@@ -370,7 +365,8 @@ class ChatService:
                 async for chunk in self.app.astream(initial_state, config, stream_mode="values"):
                     # Extract messages from the chunk
                     messages = chunk.get("messages", [])
-                    
+                    if last_sent_index == 1 and len(messages) > 1:
+                        last_sent_index = len(messages) - 1
                     # Only process new messages that haven't been sent yet
                     if messages and len(messages) > last_sent_index:
                         # Process only the new messages
@@ -385,17 +381,6 @@ class ChatService:
                             if isinstance(msg, AIMessage) and hasattr(msg, 'content'):
                                 content_str = serialize_content_to_string(msg.content)
                                 
-                                # Check if this is the research initiation message (only send once)
-                                if "Deep research initiated" in content_str and "background" in content_str and not research_initiated_sent:
-                                    # Send research_initiated notification BEFORE streaming the message
-                                    yield {
-                                        "type": "research_initiated",
-                                        "content": "Deep research has been initiated and is running in the background.",
-                                        "thread_id": thread_id
-                                    }
-                                    research_initiated_sent = True  # Mark as sent to prevent duplicates
-                                    LOGGER.info(f"Sent research_initiated notification for thread {thread_id} (message detection)")
-                                
                                 # Calculate the new content delta
                                 if content_str and len(content_str) > len(full_response):
                                     new_content = content_str[len(full_response):]
@@ -407,6 +392,8 @@ class ChatService:
                                         for i, word in enumerate(words):
                                             if i == 0:
                                                 yield {"type": "chunk", "content": word}
+                                            elif "-" in word:
+                                                yield {"type": "chunk", "content": "\n" + word}
                                             else:
                                                 yield {"type": "chunk", "content": " " + word}
                         

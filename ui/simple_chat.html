@@ -1166,6 +1166,11 @@
 
             const chatType = document.getElementById('chatType').value;
             const language = document.getElementById('language').value;
+            
+            // Debug logging
+            console.log('🚨 DEBUG: Sending message with chatType =', chatType);
+            console.log('🚨 DEBUG: Dropdown element =', document.getElementById('chatType'));
+            console.log('🚨 DEBUG: All dropdown options:', Array.from(document.getElementById('chatType').options).map(o => ({value: o.value, text: o.text, selected: o.selected})));
 
             // If no current thread, create one
             if (!currentThreadId) {
