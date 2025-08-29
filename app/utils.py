@@ -236,6 +236,9 @@ class ChatService:
         config = {"configurable": {"thread_id": thread_id}}
         
         # Get existing state to preserve token tracking and check for interrupts
+        existing_state = None
+        existing_tokens = {"total_tokens": 0}
+        
         try:
             existing_state = await self.app.aget_state(config)
             existing_tokens = existing_state.values.get("tokens", {"total_tokens": 0})
@@ -370,7 +373,9 @@ class ChatService:
                 async for chunk in self.app.astream(initial_state, config, stream_mode="values"):
                     # Extract messages from the chunk
                     messages = chunk.get("messages", [])
-                    
+                    # print(messages, "=======<>", type(messages))
+                    if last_sent_index ==1 and len(messages) > 1:
+                        last_sent_index = len(messages) - 1
                     # Only process new messages that haven't been sent yet
                     if messages and len(messages) > last_sent_index:
                         # Process only the new messages
