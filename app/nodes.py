@@ -15,7 +15,7 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate, HumanMessagePromptTemplate
 )
 
-from app.prompt import PlaygroundChatPrompt , PlaygroundContextChatPrompt
+from app.prompt import PlaygroundChatPrompt , PlaygroundRFPContextChatPrompt
 from app.helper import get_trimmer_object , update_token_tracking
 from langchain_openai import ChatOpenAI
 
@@ -63,13 +63,17 @@ async def summarize_node(state: ConversationState):
 
 # chat Nodes
 async def chat_node(state: ConversationState):
-    base = list(state["messages"])
+    messages = list(state.get("messages", []))
     language = state.get("language", "English")
-    conversation_type = state.get("conversation_type")
+    conv_type = (state.get("conversation_type") or "").lower()
+    summary = state.get("summary_context")
 
-    if conversation_type.lower() == "context-chat" or conversation_type.lower() == "context-web":
-        chat_system_prompt = PlaygroundContextChatPrompt.system_prompt
-        chat_user_prompt = PlaygroundContextChatPrompt.user_prompt
+    is_context = conv_type in {"context-chat", "context-web"}
+    use_web = conv_type in {"web", "context-web"}
+
+    if is_context:
+        chat_system_prompt = PlaygroundRFPContextChatPrompt.system_prompt
+        chat_user_prompt = PlaygroundRFPContextChatPrompt.user_prompt
     else:
         chat_system_prompt = PlaygroundChatPrompt.system_prompt
         chat_user_prompt = PlaygroundChatPrompt.user_prompt
@@ -85,40 +89,39 @@ async def chat_node(state: ConversationState):
     [system_prompt, user_prompt])
 
     model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
-    
+    trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(messages)
+
     # Check conversation type for web search functionality
-    if conversation_type == "web" or conversation_type == "context-web":
+    if use_web:
         model_chat = model_chat.bind_tools([TOOLS["web_search_preview"]])
-    
-    trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(base)
+        
+    # Common prompt args
+    prompt_args = {
+        "language": language,
+        "messages": trimmed,
+        "summary_context": summary,
+    }
 
-    if conversation_type.lower() == "context-chat" or conversation_type.lower() == "context-web":
-        from common import RedisService
-        source_id = state.get("thread_id","").split("_")
-        if source_id:
-            source_id = source_id[0]
-            rfp_context = RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text")
-        else:
-            rfp_context = ""
+    # Inject RFP context only for context-* modes
+    if is_context:
+        rfp_context = ""
+        try:
+            from common import RedisService
+            user_id = (state.get("user_id") or "").split("_", 1)[0]
+            if user_id:
+                rfp_context = RedisService.fetch_rfp_data_from_redis(user_id, "rfp_text") or ""
+        except Exception:
+            pass
+        prompt_args["rfp_context"] = rfp_context
 
-        msgs = prompt_template.format_messages(
-                language=language,
-                messages=trimmed,
-                summary_context = state.get("summary_context"),
-                rfp_context = rfp_context
-            )
-    else:
-        msgs = prompt_template.format_messages(
-            language=language,
-            messages=trimmed,
-            summary_context = state.get("summary_context")
-        )
+    msgs = prompt_template.format_messages(**prompt_args)
+
     response: AIMessage = await model_chat.ainvoke(msgs)
 
     token_info = update_token_tracking(
         state=state, response=response, model_name=DEFAULT_MODELS["chat"], additional_tokens=0
     )
-    return {"messages": [response], "summary_context": state.get("summary_context", []), "tokens": token_info}
+    return {"messages": [response], "summary_context": summary, "tokens": token_info}
 
 
 
