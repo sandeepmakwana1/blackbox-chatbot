@@ -9,3 +9,7 @@ notebook/
 database/
 backup/
 .DS_Store
+.vscode/
+__pycache__/
+.qodo
+.idea
