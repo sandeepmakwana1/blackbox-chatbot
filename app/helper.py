@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import logging
@@ -18,7 +19,10 @@ LOGGER = logging.getLogger("langgraph-app")
 
 
 def update_token_tracking(
-    state: ConversationState, response: AIMessage, model_name: str, additional_tokens: int = 0
+    state: ConversationState,
+    response: AIMessage,
+    model_name: str,
+    additional_tokens: int = 0,
 ) -> Dict:
     """Track token usage across the conversation with consistent error handling."""
     prior = state.get("tokens", {})
@@ -34,9 +38,15 @@ def update_token_tracking(
     else:
         # Best-effort fallback using content length estimation
         try:
-            content = serialize_content_to_string(response.content) if hasattr(response, 'content') else ""
+            content = (
+                serialize_content_to_string(response.content)
+                if hasattr(response, "content")
+                else ""
+            )
             input_tokens = 0  # We don't have input token info in fallback
-            output_tokens = max(1, len(content) // 4)  # Rough estimation: 4 chars per token
+            output_tokens = max(
+                1, len(content) // 4
+            )  # Rough estimation: 4 chars per token
             total_tokens = input_tokens + output_tokens
         except Exception as e:
             LOGGER.warning(f"Error estimating tokens from content: {e}")
@@ -55,12 +65,12 @@ def update_token_tracking(
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "main_tokens": main_tokens,
-            "additional_tokens": additional_tokens
+            "additional_tokens": additional_tokens,
         },
         "model": model_name,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
-    
+
     if additional_tokens > 0:
         token_info["breakdown"] = {
             "main_response_tokens": main_tokens,
@@ -69,35 +79,48 @@ def update_token_tracking(
             "summary_model": DEFAULT_MODELS["summarize"],
         }
 
-    LOGGER.info(f"Token tracking: {total_request_tokens} tokens this request (input: {input_tokens}, output: {output_tokens}, additional: {additional_tokens}), {new_total_tokens} total")
+    LOGGER.info(
+        f"Token tracking: {total_request_tokens} tokens this request (input: {input_tokens}, output: {output_tokens}, additional: {additional_tokens}), {new_total_tokens} total"
+    )
     return token_info
 
 
-def get_trimmer_object(token_counter_model, max_tokens=MAX_TOKENS_FOR_TRIM, strategy="last", include_system=True, allow_partial=False, start_on="human"):
+def get_trimmer_object(
+    token_counter_model,
+    max_tokens=MAX_TOKENS_FOR_TRIM,
+    strategy="last",
+    include_system=True,
+    allow_partial=False,
+    start_on="human",
+):
     trimmer = trim_messages(
-            max_tokens=max_tokens,
-            strategy=strategy,
-            token_counter=token_counter_model,
-            include_system=include_system,
-            allow_partial=allow_partial,
-            start_on=start_on,
-        )
+        max_tokens=max_tokens,
+        strategy=strategy,
+        token_counter=token_counter_model,
+        include_system=include_system,
+        allow_partial=allow_partial,
+        start_on=start_on,
+    )
     return trimmer
 
 
-def handle_openai_error(error: Exception, context: str = "OpenAI operation") -> AIMessage:
+def handle_openai_error(
+    error: Exception, context: str = "OpenAI operation"
+) -> AIMessage:
     """
     Handle OpenAI API errors and return a graceful AIMessage response.
-    
+
     Args:
         error: The exception that occurred
         context: Context description for logging
-        
+
     Returns:
         AIMessage with user-friendly error message
     """
     if isinstance(error, RateLimitError):
-        message = "I'm experiencing high demand right now. Please try again in a few moments."
+        message = (
+            "I'm experiencing high demand right now. Please try again in a few moments."
+        )
         LOGGER.warning(f"{context} - Rate limit exceeded: {error}")
     elif isinstance(error, APITimeoutError):
         message = "The request took too long to process. Please try again."
@@ -111,20 +134,20 @@ def handle_openai_error(error: Exception, context: str = "OpenAI operation") -> 
     else:
         message = "I'm unable to process your request at the moment. Please try again."
         LOGGER.error(f"{context} - Unexpected error: {error}")
-    
+
     return AIMessage(content=message)
 
 
 def safe_ai_invoke(func, *args, context: str = "AI operation", **kwargs):
     """
     Safely invoke an AI function with error handling.
-    
+
     Args:
         func: The function to invoke
         *args: Positional arguments for the function
         context: Context description for error logging
         **kwargs: Keyword arguments for the function
-        
+
     Returns:
         Either the function result or an error AIMessage
     """
@@ -137,13 +160,13 @@ def safe_ai_invoke(func, *args, context: str = "AI operation", **kwargs):
 async def safe_ai_invoke_async(func, *args, context: str = "AI operation", **kwargs):
     """
     Safely invoke an async AI function with error handling.
-    
+
     Args:
         func: The async function to invoke
         *args: Positional arguments for the function
         context: Context description for error logging
         **kwargs: Keyword arguments for the function
-        
+
     Returns:
         Either the function result or an error AIMessage
     """
@@ -156,10 +179,10 @@ async def safe_ai_invoke_async(func, *args, context: str = "AI operation", **kwa
 def serialize_content_to_string(content: Any) -> str:
     """
     Convert various content formats (string, list, dict) into a clean string representation.
-    
+
     Args:
         content: Content to serialize (can be string, list, dict, or other)
-        
+
     Returns:
         Clean string representation of the content
     """
@@ -173,15 +196,15 @@ def serialize_content_to_string(content: Any) -> str:
                 text_parts.append(item)
             elif isinstance(item, dict):
                 # Handle dict with 'text' or 'content' key
-                text = item.get('text', item.get('content', ''))
+                text = item.get("text", item.get("content", ""))
                 if text:
                     text_parts.append(str(text))
             else:
                 text_parts.append(str(item))
-        return ''.join(text_parts)
+        return "".join(text_parts)
     elif isinstance(content, dict):
         # Handle dictionary content
-        text = content.get('text', content.get('content', ''))
+        text = content.get("text", content.get("content", ""))
         return str(text) if text else str(content)
     else:
         return str(content)

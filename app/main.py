@@ -5,7 +5,13 @@ from contextlib import asynccontextmanager
 
 import json
 from datetime import datetime
-from app.utils import ChatService, ConversationState, HumanMessage, SystemMessage, LOGGER
+from app.utils import (
+    ChatService,
+    ConversationState,
+    HumanMessage,
+    SystemMessage,
+    LOGGER,
+)
 from langchain_core.messages import AIMessage
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
@@ -17,13 +23,16 @@ from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from app.config import OPENAI_WEBHOOK_SECRET
 
+
 class ChatCreateRequest(BaseModel):
     title: Optional[str] = None
     conversation_type: str = "chat"
     first_message: Optional[str] = None
 
+
 class ChatRenameRequest(BaseModel):
     title: str
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,9 +45,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         LOGGER.error(f"Failed to initialize ChatService during startup: {e}")
         # Don't fail startup - service will initialize on first request
-    
+
     yield
-    
+
     # Shutdown
     LOGGER.info("Shutting down application...")
     try:
@@ -46,6 +55,7 @@ async def lifespan(app: FastAPI):
         LOGGER.info("ChatService cleaned up successfully")
     except Exception as e:
         LOGGER.error(f"Error during shutdown: {e}")
+
 
 app = FastAPI(title="LangGraph Advanced Chatbot", lifespan=lifespan)
 app.add_middleware(
@@ -59,20 +69,21 @@ service = ChatService()
 chat_manager = ChatManager()
 websocket_manager = WebSocketConnectionManager()
 
+
 @app.websocket("/ws/{user_id}/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str):
     """Enhanced WebSocket endpoint with immediate thread binding."""
     await websocket.accept()
-    
+
     # Immediate registration with provided thread_id
     if not thread_id or thread_id == "default":
         thread_id = chat_manager.get_or_create_default_chat(user_id)
-    
+
     # Ensure the chat exists in our metadata (create if missing)
     existing_chat = chat_manager.get_chat(user_id, thread_id)
     if not existing_chat:
         chat_manager.create_chat(user_id, "", "chat")
-    
+
     # Register WebSocket connection immediately
     await websocket_manager.add_connection(thread_id, user_id, websocket)
     current_thread_id = thread_id
@@ -87,18 +98,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
             conversation_type = payload.get("type", "chat")
             requested_thread_id = payload.get("thread_id")
             language = payload.get("language", "English")
-            
+
             # Allow thread switching if client provides different thread_id
             if requested_thread_id and requested_thread_id != current_thread_id:
                 # Remove connection from current thread
                 await websocket_manager.remove_connection(current_thread_id, user_id)
-                
+
                 # Add connection to new thread
                 thread_id = requested_thread_id
                 await websocket_manager.add_connection(thread_id, user_id, websocket)
                 current_thread_id = thread_id
                 LOGGER.info(f"[WS] Thread switched to {thread_id} for user {user_id}")
-                
+
                 # Ensure new chat exists
                 existing_chat = chat_manager.get_chat(user_id, thread_id)
                 if not existing_chat:
@@ -119,7 +130,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
                 thread_id=thread_id,
                 user_id=user_id,
                 language=language,
-                conversation_type=conversation_type
+                conversation_type=conversation_type,
             ):
                 await websocket.send_text(json.dumps(chunk))
 
@@ -128,29 +139,39 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
             chat_manager.update_chat_activity(user_id, thread_id, user_message)
 
             # Auto-rename chat after first message if it has generic title
-            if chat and chat['title'] in ['New Chat', '', 'string']:
+            if chat and chat["title"] in ["New Chat", "", "string"]:
                 new_title = chat_manager.generate_title_from_message(user_message)
                 chat_manager.rename_chat(user_id, thread_id, new_title)
 
     except WebSocketDisconnect:
-        LOGGER.info("WebSocket disconnected: user=%s thread=%s", user_id, current_thread_id)
+        LOGGER.info(
+            "WebSocket disconnected: user=%s thread=%s", user_id, current_thread_id
+        )
     except json.JSONDecodeError as e:
         LOGGER.warning(f"Invalid JSON received from user {user_id}: {e}")
         try:
-            await websocket.send_text(json.dumps({"type": "error", "message": "Invalid JSON format"}))
+            await websocket.send_text(
+                json.dumps({"type": "error", "message": "Invalid JSON format"})
+            )
         except Exception:
             pass
     except KeyError as e:
         LOGGER.warning(f"Missing required field in message from user {user_id}: {e}")
         try:
-            await websocket.send_text(json.dumps({"type": "error", "message": f"Missing required field: {str(e)}"}))
+            await websocket.send_text(
+                json.dumps(
+                    {"type": "error", "message": f"Missing required field: {str(e)}"}
+                )
+            )
         except Exception:
             pass
     except Exception:
         LOGGER.exception(f"WebSocket error for user {user_id}")
         try:
             error_message = "An internal error occurred. Please try again."
-            await websocket.send_text(json.dumps({"type": "error", "message": error_message}))
+            await websocket.send_text(
+                json.dumps({"type": "error", "message": error_message})
+            )
         except Exception:
             LOGGER.error(f"Failed to send error message to user {user_id}")
     finally:
@@ -167,79 +188,91 @@ client = OpenAI(
 )
 
 
-async def update_conversation_state_from_webhook(thread_id: str, user_id: str, answer: str, status: str):
+async def update_conversation_state_from_webhook(
+    thread_id: str, user_id: str, answer: str, status: str
+):
     """
     Update the LangGraph conversation state with the webhook result.
-    
+
     Args:
         thread_id: The conversation thread ID
-        user_id: The user ID  
+        user_id: The user ID
         answer: The response text from OpenAI
         status: Either "completed" or "terminated"
     """
     if not thread_id:
         LOGGER.warning("No thread_id provided for state update, skipping")
         return
-    
+
     try:
         # Ensure service is initialized and connected
         await service._validate_connection()
-        
+
         # Create config for the thread
         config = {"configurable": {"thread_id": thread_id}}
-        
+
         # Try to get existing state
         try:
             existing_state = await service.app.aget_state(config)
             LOGGER.info(f"Retrieved existing state for thread {thread_id}")
         except Exception as e:
-            LOGGER.warning(f"Could not retrieve existing state for thread {thread_id}: {e}")
+            LOGGER.warning(
+                f"Could not retrieve existing state for thread {thread_id}: {e}"
+            )
             # Continue anyway - aupdate_state can handle missing threads
-        
+
         # Create assistant message with the result
         assistant_message = AIMessage(content=answer)
-        
+
         # Prepare state patch - messages will be appended due to add_messages annotation
-        patch = {
-            "messages": [assistant_message],
-            "research_status": status
-        }
-        
+        patch = {"messages": [assistant_message], "research_status": status}
+
         # Update the state
         await service.app.aupdate_state(config, patch)
-        
+
         LOGGER.info(f"Webhook state updated for thread {thread_id}, status={status}")
-        
+
         # Broadcast the result to connected WebSocket clients
         try:
             # Get current connection stats for debugging
             stats = websocket_manager.get_connection_stats()
             LOGGER.info(f"Current WebSocket stats before broadcast: {stats}")
-            
+
             webhook_message = {
                 "type": "webhook_result",
                 "content": answer,
                 "thread_id": thread_id,
                 "research_status": status,
                 "done": True,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
-            
-            LOGGER.info(f"Attempting to broadcast webhook result for thread {thread_id}")
+
+            LOGGER.info(
+                f"Attempting to broadcast webhook result for thread {thread_id}"
+            )
             LOGGER.info(f"Webhook message: {webhook_message}")
-            
-            broadcast_count = await websocket_manager.broadcast_to_thread(thread_id, webhook_message)
-            LOGGER.info(f"Broadcasted webhook result to {broadcast_count} connected clients on thread {thread_id}")
-            
+
+            broadcast_count = await websocket_manager.broadcast_to_thread(
+                thread_id, webhook_message
+            )
+            LOGGER.info(
+                f"Broadcasted webhook result to {broadcast_count} connected clients on thread {thread_id}"
+            )
+
             if broadcast_count == 0:
-                LOGGER.warning(f"No connected clients found for thread {thread_id}. Current connections: {stats['threads']}")
-            
+                LOGGER.warning(
+                    f"No connected clients found for thread {thread_id}. Current connections: {stats['threads']}"
+                )
+
         except Exception as broadcast_error:
-            LOGGER.error(f"Failed to broadcast webhook result for thread {thread_id}: {broadcast_error}")
+            LOGGER.error(
+                f"Failed to broadcast webhook result for thread {thread_id}: {broadcast_error}"
+            )
             import traceback
+
             LOGGER.error(f"Broadcast error traceback: {traceback.format_exc()}")
             # Don't let broadcast failures affect the webhook processing
-        
+
     except Exception as e:
         LOGGER.error(f"Failed to update conversation state for thread {thread_id}: {e}")
 
@@ -263,7 +296,6 @@ async def webhook(request: Request, bg: BackgroundTasks):
     if evt.type == "response.completed":
         rid = evt.data.id
 
-
         # run heavy fetch in the background
         async def handle():
             print("start running heavy fetch")
@@ -272,36 +304,36 @@ async def webhook(request: Request, bg: BackgroundTasks):
             metadata = response.metadata or {}
             thread_id = metadata.get("thread_id")
             user_id = metadata.get("user_id")
-            
+
             # Validate required fields
             if not thread_id:
-                LOGGER.warning("No thread_id found in webhook metadata, skipping state update")
+                LOGGER.warning(
+                    "No thread_id found in webhook metadata, skipping state update"
+                )
                 return
 
             from app.store import update_record
             import time
-            
+
             # Update Redis record
-            update_record(thread_id, {
-                "answer": answer,
-                "status": "completed",
-                "end_at": time.time()
-            })
-            
+            update_record(
+                thread_id,
+                {"answer": answer, "status": "completed", "end_at": time.time()},
+            )
+
             # Update LangGraph conversation state
             await update_conversation_state_from_webhook(
                 thread_id=thread_id,
                 user_id=user_id or "unknown",
                 answer=answer,
-                status="completed"
+                status="completed",
             )
-            
+
             print(f"Deep research completed for thread {thread_id}")
-        
+
         bg.add_task(handle)
 
     else:
-    
         rid = evt.data.id
         print(evt.data, "Failed : evt.data ")
 
@@ -311,30 +343,31 @@ async def webhook(request: Request, bg: BackgroundTasks):
             metadata = response.metadata or {}
             thread_id = metadata.get("thread_id")
             user_id = metadata.get("user_id")
-            
+
             # Validate required fields
             if not thread_id:
-                LOGGER.warning("No thread_id found in terminate webhook metadata, skipping state update")
+                LOGGER.warning(
+                    "No thread_id found in terminate webhook metadata, skipping state update"
+                )
                 return
 
             from app.store import update_record
             import time
-            
+
             # Update Redis record
-            update_record(thread_id, {
-                "answer": answer,
-                "status": "terminated",
-                "end_at": time.time()
-            })
-            
+            update_record(
+                thread_id,
+                {"answer": answer, "status": "terminated", "end_at": time.time()},
+            )
+
             # Update LangGraph conversation state
             await update_conversation_state_from_webhook(
                 thread_id=thread_id,
                 user_id=user_id or "unknown",
                 answer=answer,
-                status="terminated"
+                status="terminated",
             )
-            
+
             print(f"Deep research terminated for thread {thread_id}")
 
         bg.add_task(handle_terminate)
@@ -356,7 +389,7 @@ async def get_conversation_state(user_id: str, thread_id: str):
                 role = "human"
             elif isinstance(m, SystemMessage):
                 role = "system"
-            
+
             # Use centralized content serialization
             content = getattr(m, "content", "")
             content = serialize_content_to_string(content)
@@ -374,12 +407,14 @@ async def get_conversation_state(user_id: str, thread_id: str):
             "messages": [],
             "token_tracking": {},
             "conversation_type": "chat",
-            "error": "No conversation state found"
+            "error": "No conversation state found",
         }
+
 
 # -----------------------------------------------------------------------------
 # Chat Management Endpoints
 # -----------------------------------------------------------------------------
+
 
 @app.get("/api/chats/{user_id}")
 def get_user_chats(user_id: str):
@@ -391,28 +426,34 @@ def get_user_chats(user_id: str):
         LOGGER.exception("Error getting user chats")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/chats/{user_id}")
 def create_chat(user_id: str, request: ChatCreateRequest):
     """Create a new chat"""
     try:
         first_message = request.first_message or ""
         title = request.title
-        
+
         # If no custom title provided, let chat_manager generate one from message
         if not title and first_message:
-            thread_id = chat_manager.create_chat(user_id, first_message, request.conversation_type)
+            thread_id = chat_manager.create_chat(
+                user_id, first_message, request.conversation_type
+            )
         elif title:
-            thread_id = chat_manager.create_chat(user_id, first_message, request.conversation_type)
+            thread_id = chat_manager.create_chat(
+                user_id, first_message, request.conversation_type
+            )
             # Override generated title with custom one
             chat_manager.rename_chat(user_id, thread_id, title)
         else:
             thread_id = chat_manager.create_chat(user_id, "", request.conversation_type)
-            
+
         chat = chat_manager.get_chat(user_id, thread_id)
         return {"status": "success", "thread_id": thread_id, "chat": chat}
     except Exception as e:
         LOGGER.exception("Error creating chat")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.put("/api/chats/{user_id}/{thread_id}")
 def rename_chat(user_id: str, thread_id: str, request: ChatRenameRequest):
@@ -430,6 +471,7 @@ def rename_chat(user_id: str, thread_id: str, request: ChatRenameRequest):
         LOGGER.exception("Error renaming chat")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/chats/{user_id}/{thread_id}")
 def delete_chat(user_id: str, thread_id: str):
     """Delete a chat"""
@@ -444,6 +486,7 @@ def delete_chat(user_id: str, thread_id: str):
     except Exception as e:
         LOGGER.exception("Error deleting chat")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/chats/{user_id}/{thread_id}")
 def get_chat_details(user_id: str, thread_id: str):
@@ -460,6 +503,7 @@ def get_chat_details(user_id: str, thread_id: str):
         LOGGER.exception("Error getting chat details")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/research/{thread_id}")
 def get_research_status(thread_id: str):
     """Get deep research status and result for a thread"""
@@ -467,15 +511,15 @@ def get_research_status(thread_id: str):
         record = get_record(thread_id)
         if record:
             return {
-                    "thread_id": record.get("thread_id"),
-                    "user_id": record.get("user_id"),
-                    "status": record.get("status", "unknown"),
-                    "research_plan": record.get("research_plan"),
-                    "answer": record.get("answer"),
-                    "start_at": record.get("start_at"),
-                    "completed_at": record.get("completed_at"),
-                    "response_id": record.get("response_id")
-                }
+                "thread_id": record.get("thread_id"),
+                "user_id": record.get("user_id"),
+                "status": record.get("status", "unknown"),
+                "research_plan": record.get("research_plan"),
+                "answer": record.get("answer"),
+                "start_at": record.get("start_at"),
+                "completed_at": record.get("completed_at"),
+                "response_id": record.get("response_id"),
+            }
         else:
             raise HTTPException(status_code=404, detail="Research record not found")
     except HTTPException:
@@ -483,6 +527,7 @@ def get_research_status(thread_id: str):
     except Exception as e:
         LOGGER.exception("Error getting research status")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/websocket/stats")
 def get_websocket_stats():
@@ -494,6 +539,7 @@ def get_websocket_stats():
         LOGGER.exception("Error getting WebSocket stats")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/test/broadcast/{thread_id}")
 async def test_broadcast(thread_id: str, message: dict = None):
     """Test endpoint to manually trigger a webhook broadcast"""
@@ -502,23 +548,28 @@ async def test_broadcast(thread_id: str, message: dict = None):
             "type": "webhook_result",
             "content": "This is a test message from the manual broadcast endpoint!",
             "thread_id": thread_id,
-            "research_status": "completed", 
+            "research_status": "completed",
             "done": True,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
-        
-        LOGGER.info(f"Testing broadcast for thread {thread_id} with message: {test_message}")
-        broadcast_count = await websocket_manager.broadcast_to_thread(thread_id, test_message)
-        
+
+        LOGGER.info(
+            f"Testing broadcast for thread {thread_id} with message: {test_message}"
+        )
+        broadcast_count = await websocket_manager.broadcast_to_thread(
+            thread_id, test_message
+        )
+
         return {
-            "status": "success", 
+            "status": "success",
             "thread_id": thread_id,
             "broadcast_count": broadcast_count,
-            "message": test_message
+            "message": test_message,
         }
     except Exception as e:
         LOGGER.exception("Error testing broadcast")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/health")
 def health_check():
@@ -527,34 +578,34 @@ def health_check():
         # Test database connection
         pool_health = chat_manager._perform_health_check()
         pool_stats = chat_manager.get_pool_stats()
-        
+
         # Test LangGraph service initialization
         service_status = "initialized" if service._is_initialized else "not_initialized"
-        
+
         health_status = {
             "status": "healthy" if pool_health else "degraded",
             "timestamp": datetime.utcnow().isoformat(),
             "services": {
                 "database": {
                     "status": "healthy" if pool_health else "unhealthy",
-                    "pool_stats": pool_stats
+                    "pool_stats": pool_stats,
                 },
                 "langgraph": {
                     "status": service_status,
-                    "db_uri_configured": bool(service.db_uri)
-                }
-            }
+                    "db_uri_configured": bool(service.db_uri),
+                },
+            },
         }
-        
+
         status_code = 200 if pool_health else 503
         return health_status
-        
+
     except Exception as e:
         LOGGER.exception("Health check failed")
         return {
             "status": "unhealthy",
             "timestamp": datetime.utcnow().isoformat(),
-            "error": str(e)
+            "error": str(e),
         }
 
 

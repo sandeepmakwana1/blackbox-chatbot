@@ -1,0 +1,40 @@
+repos:
+  # isort for import sorting
+  # - repo: https://github.com/PyCQA/isort
+  #   rev: 5.12.0  # Check for the latest version
+  #   hooks:
+  #     - id: isort
+  #       args: ["--profile=black"]  # Ensure isort and black don't conflict
+  #       language_version: python3
+
+  # black for code formatting
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3 # Uses system python3
+  # # mypy for static type checking
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.2.0
+  #   hooks:
+  #     - id: mypy
+  #       name: mypy (type-checking)
+  #       language_version: python3
+  #       exclude: ^backup/
+  #       # Example arguments to configure your type checking
+  #       args:
+  #         - '--ignore-missing-imports'
+  #         - '--install-types'
+  #         - '--non-interactive'
+
+#   # - repo: local
+#   #   hooks:
+#   #     - id: remove-pycache
+#   #       name: Remove __pycache__ Folders
+#   #       # Instead of 'entry: bash', call bash via /usr/bin/env
+#   #       entry: /usr/bin/env
+#   #       language: script
+#   #       # The first argument is "bash", and the second is the command string
+#   #       args: ["bash", "-c", "find . -type d -name '__pycache__' -exec rm -rf {} + || true"]
+#   #       always_run: true
+#   #       pass_filenames: false

@@ -1,4 +1,4 @@
-class PlaygroundChatPrompt: 
+class PlaygroundChatPrompt:
     system_prompt = """
     You are a knowledgeable and conversational AI assistant. 
     Your personality is empathetic, curious, and helpful. 
@@ -23,8 +23,7 @@ class PlaygroundChatPrompt:
     """
 
 
-
-class PlaygroundRFPContextChatPrompt: 
+class PlaygroundRFPContextChatPrompt:
     system_prompt = """
         You are a helpful and conversational AI assistant.
         Your role is to answer questions based on the provided RFP context.
@@ -50,15 +49,14 @@ class PlaygroundRFPContextChatPrompt:
     """
 
 
-
-class PlaygroundChatSummaryPrompt: 
+class PlaygroundChatSummaryPrompt:
     system_prompt = """
     You are a high-efficiency summarization model. Your task is to update a running summary of a conversation.
     Distill the key information from the '[NEW CONVERSATION HISTORY]' and integrate it with the '[PREVIOUS SUMMARY]'.
     The final output should be a concise, updated summary under 400 words, organized with the following Markdown headings.
     If a section has no new information, you can write "No updates."
     """
-    
+
     user_prompt = """
     [PREVIOUS SUMMARY]
     {previous_summary}
@@ -103,11 +101,9 @@ class PlaygroundResearchPlainPrompt:
 
     """
 
-
     user_prompt = """
     User query : {user_query}
     """
-
 
 
 class DeepResearchPromptGenreatorPrompt:
@@ -154,4 +150,3 @@ class DeepResearchPromptGenreatorPrompt:
     user_prompt = """
     {query}
     """
-

@@ -23,7 +23,7 @@ def load_data() -> List[Dict[str, Any]]:
     """Load JSON data from file, return list."""
     if not os.path.exists(JSON_FILE):
         return []
-    
+
     with _file_lock():
         with open(JSON_FILE, "r", encoding="utf-8") as f:
             try:

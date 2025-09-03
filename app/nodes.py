@@ -1,33 +1,43 @@
 import logging
 from datetime import datetime
 from langchain_core.messages import (
-    BaseMessage, HumanMessage, AIMessage, SystemMessage, trim_messages
+    BaseMessage,
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    trim_messages,
 )
 from app.schema import ConversationState
 from app.config import SUMMARY_TRIGGER_COUNT, MAX_TOKENS_FOR_SUMMARY, TOOLS
 from app.summary_agent import summarize_history
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM, SUMMARY_TRIGGER_COUNT
 from langchain_core.messages import (
-    BaseMessage, HumanMessage, AIMessage, SystemMessage, trim_messages
+    BaseMessage,
+    HumanMessage,
+    AIMessage,
+    SystemMessage,
+    trim_messages,
 )
 from langchain_core.prompts import (
-    ChatPromptTemplate, MessagesPlaceholder,
-    SystemMessagePromptTemplate, HumanMessagePromptTemplate
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+    SystemMessagePromptTemplate,
+    HumanMessagePromptTemplate,
 )
 
-from app.prompt import PlaygroundChatPrompt , PlaygroundRFPContextChatPrompt
-from app.helper import get_trimmer_object , update_token_tracking
+from app.prompt import PlaygroundChatPrompt, PlaygroundRFPContextChatPrompt
+from app.helper import get_trimmer_object, update_token_tracking
 from langchain_openai import ChatOpenAI
 
 LOGGER = logging.getLogger("langgraph-nodes")
 
 
-# summary Nodes 
+# summary Nodes
 def route_summarize(state: ConversationState) -> str:
     msgs = state.get("messages", [])
     current_token = state.get("tokens", {}).get("current_tokens", 0)
-    if (len(msgs) >= SUMMARY_TRIGGER_COUNT and current_token >= MAX_TOKENS_FOR_SUMMARY):
-        return "summarize" 
+    if len(msgs) >= SUMMARY_TRIGGER_COUNT and current_token >= MAX_TOKENS_FOR_SUMMARY:
+        return "summarize"
     return "chat"
 
 
@@ -35,14 +45,18 @@ async def summarize_node(state: ConversationState):
     history = list(state["messages"])
     if len(history) <= 1:
         return {}
-    
-    summary_text, usage = await summarize_history(history[:-1], state.get("summary_context",[]))
-    summary_note = SystemMessage(content=f"Summary of prior conversation:\n{summary_text}")
-    
+
+    summary_text, usage = await summarize_history(
+        history[:-1], state.get("summary_context", [])
+    )
+    summary_note = SystemMessage(
+        content=f"Summary of prior conversation:\n{summary_text}"
+    )
+
     # Improved token tracking with consistent format
     prior_tokens = state.get("tokens", {"total_tokens": 0, "current_tokens": 0})
     summary_tokens = (usage or {}).get("total_tokens", 0)
-    
+
     # Reset current tokens since we're summarizing (trimming history)
     merged_tokens = {
         "total_tokens": prior_tokens.get("total_tokens", 0) + summary_tokens,
@@ -51,13 +65,15 @@ async def summarize_node(state: ConversationState):
         "summarization_tokens": summary_tokens,
         "last_request_breakdown": {
             "summarization_tokens": summary_tokens,
-            "main_tokens": 0
+            "main_tokens": 0,
         },
         "model": DEFAULT_MODELS["summarize"],
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
-    
-    LOGGER.info(f"Summarization completed: {summary_tokens} tokens used, conversation reset")
+
+    LOGGER.info(
+        f"Summarization completed: {summary_tokens} tokens used, conversation reset"
+    )
     return {"summary_context": summary_note, "tokens": merged_tokens}
 
 
@@ -78,23 +94,19 @@ async def chat_node(state: ConversationState):
         chat_system_prompt = PlaygroundChatPrompt.system_prompt
         chat_user_prompt = PlaygroundChatPrompt.user_prompt
 
+    system_prompt = SystemMessagePromptTemplate.from_template(chat_system_prompt)
+    user_prompt = HumanMessagePromptTemplate.from_template(chat_user_prompt)
+    prompt_template = ChatPromptTemplate.from_messages([system_prompt, user_prompt])
 
-    system_prompt = SystemMessagePromptTemplate.from_template(
-        chat_system_prompt
+    model_chat = ChatOpenAI(
+        model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True
     )
-    user_prompt = HumanMessagePromptTemplate.from_template(
-        chat_user_prompt
-    )
-    prompt_template = ChatPromptTemplate.from_messages(
-    [system_prompt, user_prompt])
-
-    model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
     trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(messages)
 
     # Check conversation type for web search functionality
     if use_web:
         model_chat = model_chat.bind_tools([TOOLS["web_search_preview"]])
-        
+
     # Common prompt args
     prompt_args = {
         "language": language,
@@ -107,10 +119,13 @@ async def chat_node(state: ConversationState):
         rfp_context = ""
         try:
             from common import RedisService
+
             source_id = (state.get("user_id") or "").split("_")[-1]
 
             if source_id:
-                rfp_context = RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text") or ""
+                rfp_context = (
+                    RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text") or ""
+                )
         except Exception as e:
             print(e)
         prompt_args["rfp_context"] = rfp_context
@@ -120,9 +135,9 @@ async def chat_node(state: ConversationState):
     response: AIMessage = await model_chat.ainvoke(msgs)
 
     token_info = update_token_tracking(
-        state=state, response=response, model_name=DEFAULT_MODELS["chat"], additional_tokens=0
+        state=state,
+        response=response,
+        model_name=DEFAULT_MODELS["chat"],
+        additional_tokens=0,
     )
     return {"messages": [response], "summary_context": summary, "tokens": token_info}
-
-
-
