@@ -15,7 +15,7 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate, HumanMessagePromptTemplate
 )
 
-from app.prompt import PlaygroundChatPrompt
+from app.prompt import PlaygroundChatPrompt , PlaygroundContextChatPrompt
 from app.helper import get_trimmer_object , update_token_tracking
 from langchain_openai import ChatOpenAI
 
@@ -65,28 +65,54 @@ async def summarize_node(state: ConversationState):
 async def chat_node(state: ConversationState):
     base = list(state["messages"])
     language = state.get("language", "English")
-    
+    conversation_type = state.get("conversation_type")
+
+    if conversation_type.lower() == "context-chat" or conversation_type.lower() == "context-web":
+        chat_system_prompt = PlaygroundContextChatPrompt.system_prompt
+        chat_user_prompt = PlaygroundContextChatPrompt.user_prompt
+    else:
+        chat_system_prompt = PlaygroundChatPrompt.system_prompt
+        chat_user_prompt = PlaygroundChatPrompt.user_prompt
+
+
     system_prompt = SystemMessagePromptTemplate.from_template(
-        PlaygroundChatPrompt.system_prompt
+        chat_system_prompt
     )
     user_prompt = HumanMessagePromptTemplate.from_template(
-    PlaygroundChatPrompt.user_prompt
+        chat_user_prompt
     )
     prompt_template = ChatPromptTemplate.from_messages(
     [system_prompt, user_prompt])
+
     model_chat = ChatOpenAI(model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True)
     
     # Check conversation type for web search functionality
-    conversation_type = state.get("conversation_type")
-    if conversation_type == "web":
+    if conversation_type == "web" or conversation_type == "context-web":
         model_chat = model_chat.bind_tools([TOOLS["web_search_preview"]])
     
     trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(base)
-    msgs = prompt_template.format_messages(
-        language=language,
-        messages=trimmed,
-        summary_context = state.get("summary_context") 
-    )
+
+    if conversation_type.lower() == "context-chat" or conversation_type.lower() == "context-web":
+        from common import RedisService
+        source_id = state.get("thread_id","").split("_")
+        if source_id:
+            source_id = source_id[0]
+            rfp_context = RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text")
+        else:
+            rfp_context = ""
+
+        msgs = prompt_template.format_messages(
+                language=language,
+                messages=trimmed,
+                summary_context = state.get("summary_context"),
+                rfp_context = rfp_context
+            )
+    else:
+        msgs = prompt_template.format_messages(
+            language=language,
+            messages=trimmed,
+            summary_context = state.get("summary_context")
+        )
     response: AIMessage = await model_chat.ainvoke(msgs)
 
     token_info = update_token_tracking(
