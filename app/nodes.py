@@ -107,9 +107,7 @@ async def chat_node(state: ConversationState):
         rfp_context = ""
         try:
             from common import RedisService
-            print(state)
-            source_id = (state.get("user_id") or "").split("_", 1)[0]
-            print(source_id, '====>')
+            source_id = (state.get("user_id") or "").split("_")[-1]
 
             if source_id:
                 rfp_context = RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text") or ""

@@ -7,7 +7,7 @@ if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set. Export it before starting the app.")
 
 DEFAULT_MODELS = {
-    "chat":       os.getenv("MODEL_CHAT", "gpt-5-chat-latest"),
+    "chat":       os.getenv("MODEL_CHAT", "gpt-4.1-2025-04-14"),
     "summarize":  os.getenv("MODEL_SUMMARIZE", "gpt-5-chat-latest"),
     "research":   os.getenv("MODEL_RESEARCH", "gpt-4o"),
     "embed":      os.getenv("MODEL_EMBED", "text-embedding-3-large"),
