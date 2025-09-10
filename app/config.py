@@ -42,3 +42,13 @@ if not OPENAI_WEBHOOK_SECRET:
 OPENAI_RESPONSE_MODEL = os.getenv(
     "OPENAI_RESPONSE_MODEL", "o4-mini-deep-research-2025-06-26"
 )
+
+
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+S3_BUCKET = os.getenv("S3_BUCKET_NAME", "blackbox-dev-playground")
+S3_PREFIX = os.getenv("S3_PREFIX", "file_uploads")
+PRESIGN_EXPIRES = int(os.getenv("PRESIGN_EXPIRES_SEC", "86400"))
+
+
+if not S3_BUCKET:
+    raise RuntimeError("Set S3_BUCKET_NAME env var")

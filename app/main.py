@@ -1,5 +1,6 @@
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from openai.resources.files import FilesWithRawResponse
 from starlette.websockets import WebSocketDisconnect
 from contextlib import asynccontextmanager
 
@@ -22,7 +23,15 @@ from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from app.config import OPENAI_WEBHOOK_SECRET
+from app.config import S3_PREFIX, S3_BUCKET, PRESIGN_EXPIRES, AWS_REGION
+import os, uuid, mimetypes
+from typing import List
 
+import boto3
+from botocore.client import Config
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+
+s3 = boto3.client("s3", region_name=AWS_REGION, config=Config(s3={"addressing_style": "virtual"}))
 
 class ChatCreateRequest(BaseModel):
     title: Optional[str] = None
@@ -570,6 +579,45 @@ async def test_broadcast(thread_id: str, message: dict = None):
         LOGGER.exception("Error testing broadcast")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+def make_key(filename: str, user_id: str, thread_id: str) -> str:
+    name, ext = os.path.splitext(os.path.basename(filename or "file.bin"))
+    return f"{S3_PREFIX}/{user_id}/{thread_id}/{name[:64]}-{uuid.uuid4().hex}{ext.lower()}"
+
+@app.post("/api/upload", response_model=List[str]) 
+async def upload_and_presign(
+    files: List[UploadFile] = File(...),
+    user_id: str = Form(...),
+    thread_id: str = Form(...)
+):
+    """
+    Accepts files, uploads each to S3, and returns a list of pre-signed GET URLs.
+    Form field name must be `files`.
+    """
+    if not files or not thread_id or not user_id:
+        print(files, thread_id, user_id)
+        raise HTTPException(status_code=400, detail="No files provided or thread_id or user_id")
+
+    urls: List[str] = []
+    for f in files:
+        key = make_key(f.filename, user_id, thread_id)
+        content_type = f.content_type or mimetypes.guess_type(f.filename or "")[0] or "application/octet-stream"
+        print(content_type, "==========>")
+        try:
+            await f.seek(0)
+            s3.upload_fileobj(f.file, S3_BUCKET, key, ExtraArgs={"ContentType": content_type})
+            url = s3.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": S3_BUCKET, "Key": key},
+                ExpiresIn=PRESIGN_EXPIRES,
+            )
+            urls.append(url)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to process {f.filename}: {e}")
+        finally:
+            await f.close()
+        
+    return urls
 
 @app.get("/api/health")
 def health_check():
