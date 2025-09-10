@@ -32,12 +32,16 @@ class RedisManager:
         """
         try:
             env_endpoint = os.getenv("REDIS_ENDPOINT")
+            redis_password = os.getenv("REDIS_PASSWORD")
+            redis_user = os.getenv("REDIS_USER")
             if env_endpoint:
                 endpoint = env_endpoint
                 source = "environment variable"
             else:
                 try:
                     endpoint = get_parameter("redis-endpoint")
+                    redis_password = get_parameter("redis-password")
+                    redis_user = get_parameter("redis-user")
                     source = "SSM Parameter Store"
                 except Exception:
                     logger.warning(
@@ -47,17 +51,14 @@ class RedisManager:
 
             host, port = endpoint.split(":")
             port = int(port)
-            use_ssl = True
 
-            logger.info(
-                f"Initializing Redis connection to {host}:{port} (SSL: {use_ssl})"
-            )
+            logger.info(f"Initializing Redis connection to {host}:{port} (without SSL)")
             return get_redis_connection(
                 host=host,
                 port=port,
                 decode_responses=True,
-                ssl=use_ssl,
-                ssl_cert_reqs=None,
+                username=redis_user,
+                password=redis_password,
                 socket_timeout=10,
                 socket_connect_timeout=10,
             )

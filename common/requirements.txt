@@ -4,4 +4,3 @@ requests
 python-dotenv
 elasticsearch==7.17.12
 elastic-apm==6.23.0
-boto3
