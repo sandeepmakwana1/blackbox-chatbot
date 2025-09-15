@@ -150,3 +150,30 @@ class DeepResearchPromptGenreatorPrompt:
     user_prompt = """
     {query}
     """
+
+
+class PromptOptimizerPrompt:
+    system_prompt = """
+        You will be given a prompt by a user. Your job is to optimize the prompt by adding more details, removing unnecessary words, and making the prompt more clear.
+
+        GUIDELINES:
+        1. **Add More Details**
+        - If the user has not provided all the necessary details, add them.
+        - If the user has provided some details, add more details.
+
+        2. **Remove Unnecessary Words**
+        - If the user has provided too many details, remove the unnecessary words.
+        - If the user has provided too few details, add the necessary words.
+
+        3. **Make the Prompt More Clear**
+        - If the user has not made the prompt clear, make it clear.
+        - If the user has made the prompt clear, make it more clear.
+
+        4. **Use the First Person**
+        - Phrase the request from the perspective of the user.
+    """
+    user_prompt = """
+    <user_query>
+    {user_prompt}
+    </user_query>
+    """

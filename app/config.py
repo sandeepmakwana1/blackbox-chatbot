@@ -42,3 +42,5 @@ if not OPENAI_WEBHOOK_SECRET:
 OPENAI_RESPONSE_MODEL = os.getenv(
     "OPENAI_RESPONSE_MODEL", "o4-mini-deep-research-2025-06-26"
 )
+
+OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-5-nano-2025-08-07")

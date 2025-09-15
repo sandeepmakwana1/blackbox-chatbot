@@ -12,6 +12,7 @@ from app.utils import (
     SystemMessage,
     LOGGER,
 )
+from app.prompt_optimizer import optimize_prompt
 from langchain_core.messages import AIMessage
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
@@ -537,6 +538,17 @@ def get_websocket_stats():
         return {"status": "success", "websocket_stats": stats}
     except Exception as e:
         LOGGER.exception("Error getting WebSocket stats")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/prompt/optimize")
+def prompt_optimizer(request: PromptOptimizerInput):
+    """Optimize a prompt"""
+    try:
+        optimized_prompt = optimize_prompt(request.user_prompt)
+        return {"status": "success", "result": optimized_prompt}
+    except Exception as e:
+        LOGGER.exception("Error optimizing prompt")
         raise HTTPException(status_code=500, detail=str(e))
 
 

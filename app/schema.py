@@ -26,3 +26,7 @@ class ConversationState(TypedDict):
         Optional[bool]
     ]  # Flag to indicate research has been initiated
     tokens: Optional[Dict]
+
+
+class PromptOptimizerInput(TypedDict):
+    user_prompt: str
