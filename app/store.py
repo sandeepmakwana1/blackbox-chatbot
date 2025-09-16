@@ -89,14 +89,14 @@ def get_all_records() -> List[Dict[str, Any]]:
 
 if __name__ == "__main__":
     # Add records
-    add_record({"thread_id": 1, "name": "Alice", "age": 25})
-    add_record({"thread_id": 2, "name": "Bob", "age": 30})
+    add_record({"thread_id": "1", "name": "Alice", "age": 25})
+    add_record({"thread_id": "2", "name": "Bob", "age": 30})
 
     # Update a record
-    update_record(1, {"age": 26, "city": "New York"})
+    update_record("1", {"age": 26, "city": "New York"})
 
     # Delete a record
-    delete_record(2)
+    delete_record("2")
 
     # Show current data
     print("Final JSON:", load_data())

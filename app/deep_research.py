@@ -241,7 +241,9 @@ async def deep_research_run_node(state: ConversationState) -> Dict:
         }
 
         # Clean up any existing record and add new one
-        delete_record(state.get("thread_id"))
+        thread_id = state.get("thread_id")
+        if thread_id:
+            delete_record(thread_id)
         add_record(record)
 
         LOGGER.info(f"Deep research initiated for thread {state.get('thread_id')}")

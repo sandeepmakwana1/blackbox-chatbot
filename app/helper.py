@@ -15,7 +15,7 @@ from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
 from app.schema import ConversationState
 
 logging.basicConfig(level=logging.INFO)
-LOGGER = logging.getLogger("langgraph-app")
+LOGGER = logging.getLogger("langgraph-playground")
 
 
 def update_token_tracking(
@@ -23,9 +23,11 @@ def update_token_tracking(
     response: AIMessage,
     model_name: str,
     additional_tokens: int = 0,
-) -> Dict:
+) -> Dict[str, Any]:
     """Track token usage across the conversation with consistent error handling."""
-    prior = state.get("tokens", {})
+    prior = state.get("tokens")
+    if prior is None:
+        prior = {}
     prior_total = prior.get("total_tokens", 0)
     prior_current = prior.get("current_tokens", 0)
 

@@ -20,7 +20,9 @@ DEFAULT_MODELS = {
 TOOLS = {"web_search_preview": {"type": "web_search_preview"}}
 
 
-MAX_TOKENS_FOR_TRIM = int(os.getenv("MAX_TOKENS_FOR_TRIM", "180000"))
+_raw_max = int(os.getenv("MAX_TOKENS_FOR_TRIM", "180000"))
+# Clamp to a sane range to avoid exceeding model context windows
+MAX_TOKENS_FOR_TRIM = max(1000, min(_raw_max, 120000))
 SUMMARY_TRIGGER_COUNT = int(os.getenv("SUMMARY_TRIGGER_COUNT", "10"))
 MAX_TOKENS_FOR_SUMMARY = 10000
 
