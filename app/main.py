@@ -23,17 +23,12 @@ from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from app.config import OPENAI_WEBHOOK_SECRET
-from app.schema import PromptOptimizerInput
+from app.schema import PromptOptimizerInput, ChatCreateRequest, ChatRenameRequest
 
 
-class ChatCreateRequest(BaseModel):
-    title: Optional[str] = None
-    conversation_type: str = "chat"
-    first_message: Optional[str] = None
-
-
-class ChatRenameRequest(BaseModel):
-    title: str
+client = OpenAI(
+    webhook_secret=OPENAI_WEBHOOK_SECRET,
+)
 
 
 @asynccontextmanager
@@ -59,7 +54,7 @@ async def lifespan(app: FastAPI):
         LOGGER.error(f"Error during shutdown: {e}")
 
 
-app = FastAPI(title="LangGraph Advanced Chatbot", lifespan=lifespan)
+app = FastAPI(title="BlackBox Playground", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -183,11 +178,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
             await websocket.close()
         except Exception:
             pass
-
-
-client = OpenAI(
-    webhook_secret=OPENAI_WEBHOOK_SECRET,
-)
 
 
 async def update_conversation_state_from_webhook(
@@ -507,7 +497,7 @@ def get_chat_details(user_id: str, thread_id: str):
 
 
 @app.get("/api/research/{thread_id}")
-def get_research_status(thread_id: str):
+async def get_research_status(thread_id: str):
     """Get deep research status and result for a thread"""
     try:
         record = get_record(thread_id)

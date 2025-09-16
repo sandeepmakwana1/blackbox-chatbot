@@ -31,3 +31,13 @@ class ConversationState(TypedDict):
 
 class PromptOptimizerInput(BaseModel):
     user_prompt: str
+
+
+class ChatCreateRequest(BaseModel):
+    title: Optional[str] = None
+    conversation_type: str = "chat"
+    first_message: Optional[str] = None
+
+
+class ChatRenameRequest(BaseModel):
+    title: str
