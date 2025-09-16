@@ -1,3 +1,4 @@
+from openai import BaseModel
 from typing_extensions import TypedDict
 from typing import Annotated, Dict, List, Optional, Sequence
 from langchain_core.messages import (
@@ -28,5 +29,5 @@ class ConversationState(TypedDict):
     tokens: Optional[Dict]
 
 
-class PromptOptimizerInput(TypedDict):
+class PromptOptimizerInput(BaseModel):
     user_prompt: str

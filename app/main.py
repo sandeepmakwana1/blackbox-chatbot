@@ -23,6 +23,7 @@ from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from app.config import OPENAI_WEBHOOK_SECRET
+from app.schema import PromptOptimizerInput
 
 
 class ChatCreateRequest(BaseModel):
@@ -542,10 +543,10 @@ def get_websocket_stats():
 
 
 @app.post("/api/prompt/optimize")
-def prompt_optimizer(request: PromptOptimizerInput):
+async def prompt_optimizer(request: PromptOptimizerInput):
     """Optimize a prompt"""
     try:
-        optimized_prompt = optimize_prompt(request.user_prompt)
+        optimized_prompt = await optimize_prompt(request.user_prompt)
         return {"status": "success", "result": optimized_prompt}
     except Exception as e:
         LOGGER.exception("Error optimizing prompt")
@@ -584,7 +585,7 @@ async def test_broadcast(thread_id: str, message: dict = None):
 
 
 @app.get("/api/health")
-def health_check():
+async def health_check():
     """Comprehensive health check with database connection pool status"""
     try:
         # Test database connection
