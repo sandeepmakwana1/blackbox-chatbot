@@ -85,12 +85,16 @@ def _build_deep_research_graph(graph: StateGraph) -> StateGraph:
 
     # Main routing from START based on conversation type
     def route_conversation_type(state: ConversationState) -> str:
-        """Route based on conversation type and context."""
+        """Route based on conversation type, tool, and context."""
         conv_type = state.get("conversation_type")
+        tool = state.get("tool", "")
+
+        # Deep research takes priority
         if conv_type == CONV_TYPE_DEEP_RESEARCH:
             return "deepresearch_plaining"
 
-        # Fall back to standard chat routing
+        # For other conversation types, consider tool and fall back to standard routing
+        # The tool parameter doesn't change the graph structure, just the node behavior
         return route_summarize(state)
 
     # Set up the routing

@@ -192,6 +192,8 @@ class ChatService:
         user_id: str = "anonymous",
         language: str = "English",
         conversation_type: str = "chat",
+        tool: str = "",
+        contexts: List[str] = [],
     ) -> Dict[str, Any]:
         """
         Process a single message in a conversation thread.
@@ -229,6 +231,8 @@ class ChatService:
             "messages": [HumanMessage(content=message)],
             "user_id": user_id,
             "conversation_type": conversation_type,
+            "tool": tool,
+            "contexts": contexts,
             "language": language,
             "thread_id": thread_id,
             "tokens": existing_tokens,
@@ -252,6 +256,8 @@ class ChatService:
         user_id: str = "anonymous",
         language: str = "English",
         conversation_type: str = "chat",
+        tool: str = "",
+        contexts: List[str] = [],
     ):
         """
         Process a message with streaming responses using LangGraph's astream.
@@ -290,6 +296,8 @@ class ChatService:
                     "type": "start",
                     "content": "",
                     "conversation_type": conversation_type,
+                    "tool": tool,
+                    "contexts": contexts,
                 }
                 full_response = ""
                 research_initiated_sent = False  # Track notification in resume flow too
@@ -429,6 +437,8 @@ class ChatService:
             "messages": [HumanMessage(content=message)],
             "user_id": user_id,
             "conversation_type": conversation_type,
+            "tool": tool,
+            "contexts": contexts,
             "language": language,
             "thread_id": thread_id,
             "tokens": existing_tokens,

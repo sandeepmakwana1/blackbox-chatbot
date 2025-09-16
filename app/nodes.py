@@ -25,9 +25,14 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
 )
 
-from app.prompt import PlaygroundChatPrompt, PlaygroundRFPContextChatPrompt
+from app.prompt import (
+    PlaygroundChatPrompt,
+    PlaygroundRFPContextChatPrompt,
+    PlaygroundProposalSectionContextChatPrompt,
+)
 from app.helper import get_trimmer_object, update_token_tracking
 from langchain_openai import ChatOpenAI
+from app.constents import ContextType
 
 LOGGER = logging.getLogger("langgraph-nodes")
 
@@ -39,6 +44,19 @@ def route_summarize(state: ConversationState) -> str:
     if len(msgs) >= SUMMARY_TRIGGER_COUNT and current_token >= MAX_TOKENS_FOR_SUMMARY:
         return "summarize"
     return "chat"
+
+
+# helper
+def get_data_from_redis(source_id, key):
+    redis_data = ""
+    try:
+        from common import RedisService
+
+        if source_id:
+            redis_data = RedisService.fetch_rfp_data_from_redis(source_id, key) or ""
+    except Exception as e:
+        print(e)
+    return redis_data
 
 
 async def summarize_node(state: ConversationState):
@@ -81,15 +99,24 @@ async def summarize_node(state: ConversationState):
 async def chat_node(state: ConversationState):
     messages = list(state.get("messages", []))
     language = state.get("language", "English")
-    conv_type = (state.get("conversation_type") or "").lower()
+    tool = state.get("tool", "")
+    contexts = state.get("contexts", [])
     summary = state.get("summary_context")
 
-    is_context = conv_type in {"context-chat", "context-web"}
-    use_web = conv_type in {"web", "context-web"}
+    # Use new tool and contexts parameters
+    use_web = tool == "web"
+    has_contexts = bool(contexts)
 
-    if is_context:
-        chat_system_prompt = PlaygroundRFPContextChatPrompt.system_prompt
-        chat_user_prompt = PlaygroundRFPContextChatPrompt.user_prompt
+    # Determine which prompt to use based on contexts
+    if has_contexts:
+        if len(contexts) == 1 and contexts[0] == "rfp_context":
+            chat_system_prompt = PlaygroundRFPContextChatPrompt.system_prompt
+            chat_user_prompt = PlaygroundRFPContextChatPrompt.user_prompt
+        else:
+            chat_system_prompt = (
+                PlaygroundProposalSectionContextChatPrompt.system_prompt
+            )
+            chat_user_prompt = PlaygroundProposalSectionContextChatPrompt.user_prompt
     else:
         chat_system_prompt = PlaygroundChatPrompt.system_prompt
         chat_user_prompt = PlaygroundChatPrompt.user_prompt
@@ -103,7 +130,7 @@ async def chat_node(state: ConversationState):
     )
     trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(messages)
 
-    # Check conversation type for web search functionality
+    # Enable web search if tool is "web"
     if use_web:
         model_chat = model_chat.bind_tools([TOOLS["web_search_preview"]])
 
@@ -115,21 +142,32 @@ async def chat_node(state: ConversationState):
     }
 
     # Inject RFP context only for context-* modes
-    if is_context:
-        rfp_context = ""
-        try:
-            from common import RedisService
-
-            source_id = (state.get("user_id") or "").split("_")[-1]
-
-            if source_id:
-                rfp_context = (
-                    RedisService.fetch_rfp_data_from_redis(source_id, "rfp_text") or ""
-                )
-        except Exception as e:
-            print(e)
-        prompt_args["rfp_context"] = rfp_context
-
+    source_id = (state.get("user_id") or "").split("_")[-1]
+    context_mapping = {
+        ContextType.COST_INFRASTRUCTURE: "COST INFRASTRUCTURE",
+        ContextType.COST_LICENSE: "COST LICENSE",
+        ContextType.COST_HR: "COST Hourly Wages",
+        ContextType.VALIDATION_LEGAL: "VALIDATION LEGAL CHECK DATA",
+        ContextType.VALIDATION_TECHNICAL: "VALIDATION TECHNICAL CHECK DATA",
+        ContextType.TABLE_OF_CONTENT: "TABLE OF CONTENT",
+        ContextType.DEEP_RESEARCH: "DEEP RESEARCH",
+        ContextType.USER_PREFERENCE: "USER PREFERENCE",
+    }
+    prompt_text = " "
+    if has_contexts:
+        for context in contexts:
+            if "content" in context:
+                continue  # TODO: NEED TO IMPLEMENT
+            # Handle each context type in a more concise way
+            elif context in context_mapping:
+                if data := get_data_from_redis(source_id=source_id, key=context):
+                    section_header = context_mapping[context]
+                    prompt_text += f"""
+                    [{section_header}]
+                    {data}
+                    """
+        prompt_args["section_context"] = prompt_text
+        prompt_args["rfp_context"] = get_data_from_redis(source_id, "rfp_text")
     msgs = prompt_template.format_messages(**prompt_args)
 
     response: AIMessage = await model_chat.ainvoke(msgs)

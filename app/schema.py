@@ -15,6 +15,8 @@ class ConversationState(TypedDict):
     summary_context: NotRequired[Sequence[BaseMessage]]
     user_id: str
     conversation_type: str  # "chat" | "search"| "document_qa" | "deep-research"
+    tool: Optional[str] = ""
+    contexts: Optional[List[Optional[str]]] = None
     language: str
     thread_id: str  # Added for memory integration
     documents_context: Optional[List[Dict]]
