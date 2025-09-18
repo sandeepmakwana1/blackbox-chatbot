@@ -1,4 +1,4 @@
-from openai import BaseModel
+from pydantic import BaseModel
 from typing_extensions import TypedDict
 from typing import Annotated, Dict, List, Optional, Sequence
 from langchain_core.messages import (
@@ -15,8 +15,8 @@ class ConversationState(TypedDict):
     summary_context: NotRequired[Sequence[BaseMessage]]
     user_id: str
     conversation_type: str  # "chat" | "search"| "document_qa" | "deep-research"
-    tool: Optional[str] = ""
-    contexts: Optional[List[Optional[str]]] = None
+    tool: Optional[str]
+    contexts: Optional[List[Optional[str]]]
     language: str
     thread_id: str  # Added for memory integration
     documents_context: Optional[List[Dict]]

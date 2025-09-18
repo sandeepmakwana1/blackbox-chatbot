@@ -109,7 +109,7 @@ async def chat_node(state: ConversationState):
 
     # Determine which prompt to use based on contexts
     if has_contexts:
-        if len(contexts) == 1 and contexts[0] == "rfp_context":
+        if contexts and len(contexts) == 1 and contexts[0] == "rfp_context":
             chat_system_prompt = PlaygroundRFPContextChatPrompt.system_prompt
             chat_user_prompt = PlaygroundRFPContextChatPrompt.user_prompt
         else:
@@ -152,13 +152,19 @@ async def chat_node(state: ConversationState):
         ContextType.TABLE_OF_CONTENT: "TABLE OF CONTENT",
         ContextType.DEEP_RESEARCH: "DEEP RESEARCH",
         ContextType.USER_PREFERENCE: "USER PREFERENCE",
+        ContextType.CONTENT: "PROPOSAL SECTIONS CONTENT",
     }
     prompt_text = " "
-    if has_contexts:
+    if has_contexts and contexts:
         for context in contexts:
-            if "content" in context:
-                continue  # TODO: NEED TO IMPLEMENT
-            # Handle each context type in a more concise way
+            if contexts and "content" in context:
+                if data := get_data_from_redis(
+                    source_id=source_id, key=ContextType.CONTENT
+                ):
+                    prompt_text += f"""
+                    [{context_mapping[ContextType.CONTENT]}]
+                    {data}
+                    """
             elif context in context_mapping:
                 if data := get_data_from_redis(source_id=source_id, key=context):
                     section_header = context_mapping[context]
