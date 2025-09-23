@@ -162,6 +162,7 @@ async def chat_node(state: ConversationState):
                     source_id=source_id, key=ContextType.CONTENT
                 ):
                     prompt_text += f"""
+                    Priorities below section content as user will mostly ask question on this sections 
                     [{context_mapping[ContextType.CONTENT]}]
                     {data}
                     """
@@ -173,7 +174,8 @@ async def chat_node(state: ConversationState):
                     {data}
                     """
         prompt_args["section_context"] = prompt_text
-        prompt_args["rfp_context"] = get_data_from_redis(source_id, "rfp_text")
+        prompt_args["rfp_context"] = get_data_from_redis(source_id, "user_summary")
+    print(prompt_args, '=====>')
     msgs = prompt_template.format_messages(**prompt_args)
 
     response: AIMessage = await model_chat.ainvoke(msgs)
