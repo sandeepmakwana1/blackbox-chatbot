@@ -240,8 +240,9 @@ class ChatService:
 
         try:
             result = await self.app.ainvoke(initial_state, config)
-        except Exception as e:
-            LOGGER.warning(f"Failed to invoke: {e}")
+        except Exception:
+            LOGGER.exception("Chat graph invocation failed for thread %s", thread_id)
+            raise
 
         return {
             "response": result["messages"][-1].content,

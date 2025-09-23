@@ -9,7 +9,7 @@ if not OPENAI_API_KEY:
 
 DEFAULT_MODELS = {
     "chat": os.getenv("MODEL_CHAT", "gpt-4.1-2025-04-14"),
-    "summarize": os.getenv("MODEL_SUMMARIZE", "gpt-5-chat-latest"),
+    "summarize": os.getenv("MODEL_SUMMARIZE", "gpt-4.1-mini"),
     "research": os.getenv("MODEL_RESEARCH", "gpt-4o"),
     "embed": os.getenv("MODEL_EMBED", "text-embedding-3-large"),
     "research_plain": os.getenv("MODEL_RESEARCH_PLAIN", "gpt-4.1-2025-04-14"),
@@ -41,8 +41,6 @@ if not OPENAI_WEBHOOK_SECRET:
         "OPENAI_WEBHOOK_SECRET is not set. Export it before starting the app."
     )
 
-OPENAI_RESPONSE_MODEL = os.getenv(
-    "OPENAI_RESPONSE_MODEL", "o4-mini-deep-research-2025-06-26"
-)
+OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "o4-mini")
 
-OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-5-nano-2025-08-07")
+OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-4o-mini")
