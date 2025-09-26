@@ -175,7 +175,6 @@ async def chat_node(state: ConversationState):
                     """
         prompt_args["section_context"] = prompt_text
         prompt_args["rfp_context"] = get_data_from_redis(source_id, "user_summary")
-    print(prompt_args, '=====>')
     msgs = prompt_template.format_messages(**prompt_args)
 
     response: AIMessage = await model_chat.ainvoke(msgs)
