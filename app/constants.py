@@ -20,8 +20,8 @@ class ContextType:
 
 
 BATCH_CONTEXT_PATHS = {
-    ContextType.VALIDATION_LEGAL: "stage/validation/validation_legal.json",
-    ContextType.VALIDATION_TECHNICAL: "stage/validation/validation_technical.json",
+    ContextType.VALIDATION_LEGAL: "stage/validation/validation_results.json",
+    ContextType.VALIDATION_TECHNICAL: "stage/validation/validation_results.json",
     ContextType.TABLE_OF_CONTENT: "stage/pre_steps/table_of_content.json",
     ContextType.DEEP_RESEARCH: "stage/deep_research/deep_research.json",
     ContextType.USER_PREFERENCE: "stage/user_preferences/user_preferences.json",
