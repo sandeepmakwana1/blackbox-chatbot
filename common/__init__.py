@@ -10,6 +10,14 @@ This package provides shared functionality for AWS Lambda handlers including:
 """
 
 from common.database import get_connection
+from common.datastore import (
+    S3DataNotFoundError,
+    S3InvalidJSONError,
+    S3OperationError,
+    check_s3_file_exists,
+    get_s3_data,
+    store_s3_data,
+)
 from common.decorators import measure_execution_time
 
 # Import core components for easy access
@@ -25,4 +33,10 @@ __all__ = [
     "get_connection",
     "RedisManager",
     "RedisService",
+    "get_s3_data",
+    "store_s3_data",
+    "check_s3_file_exists",
+    "S3OperationError",
+    "S3DataNotFoundError",
+    "S3InvalidJSONError",
 ]

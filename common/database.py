@@ -2,7 +2,7 @@
 Database connection utilities for PostgreSQL.
 """
 import threading
-
+from typing import Optional
 import psycopg2
 
 from common.logging import get_custom_logger
@@ -15,7 +15,7 @@ _connection = None
 _lock = threading.Lock()
 
 
-def get_connection(parameter_path_prefix: str = get_parameter_path_prefix()):
+def get_connection(parameter_path_prefix: Optional[str] = None):
     """
     Returns a singleton database connection. Creates the connection on first call
     or if the previous connection has been closed.
@@ -34,6 +34,9 @@ def get_connection(parameter_path_prefix: str = get_parameter_path_prefix()):
     # If we've already got an open connection, return it
     if _connection is not None and _connection.closed == 0:
         return _connection
+    parameter_path_prefix = (
+        parameter_path_prefix if parameter_path_prefix else get_parameter_path_prefix()
+    )
 
     # Otherwise, acquire lock and (re)create the connection
     with _lock:

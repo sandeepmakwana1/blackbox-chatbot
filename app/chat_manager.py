@@ -1,15 +1,16 @@
+import logging
 import os
 import re
 import uuid
-import logging
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Optional, Tuple
 
 # Production-ready PostgreSQL driver
 import psycopg2
-from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import DictCursor
+from psycopg2.pool import SimpleConnectionPool
 
 # Configure logging
 LOGGER = logging.getLogger("chat-manager-db")
@@ -348,3 +349,25 @@ class ChatManager:
             return user_chats[0]["thread_id"]
         else:
             return self.create_chat(user_id)
+
+    @contextmanager
+    def get_connection(self, *, close: bool = False):
+        """
+        Context manager that yields a raw psycopg2 connection from the pool.
+        The connection is automatically rolled back (to end any open transaction)
+        and returned to the pool when the context exits.
+        """
+        connection = None
+        try:
+            if not self.pool:
+                raise RuntimeError("Connection pool is not initialized.")
+            connection = self.pool.getconn()
+            yield connection
+        finally:
+            if connection:
+                try:
+                    connection.rollback()
+                except Exception:
+                    # If the connection was committed or closed, rollback may fail safely.
+                    pass
+                self.pool.putconn(connection, close=close)
