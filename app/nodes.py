@@ -1,38 +1,33 @@
 import logging
 from datetime import datetime
-from langchain_core.messages import (
-    BaseMessage,
-    HumanMessage,
-    AIMessage,
-    SystemMessage,
-    trim_messages,
-)
-from app.schema import ConversationState
-from app.config import SUMMARY_TRIGGER_COUNT, MAX_TOKENS_FOR_SUMMARY, TOOLS
-from app.summary_agent import summarize_history
-from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM, SUMMARY_TRIGGER_COUNT
-from langchain_core.messages import (
-    BaseMessage,
-    HumanMessage,
-    AIMessage,
-    SystemMessage,
-    trim_messages,
-)
+
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_core.prompts import (
     ChatPromptTemplate,
-    MessagesPlaceholder,
-    SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
 )
+from langchain_openai import ChatOpenAI
 
+from app.config import (
+    DEFAULT_MODELS,
+    MAX_TOKENS_FOR_SUMMARY,
+    SUMMARY_TRIGGER_COUNT,
+    TOOLS,
+)
+from app.constants import ContextType
+from app.helper import (
+    get_context_data,
+    get_trimmer_object,
+    update_token_tracking,
+)
 from app.prompt import (
     PlaygroundChatPrompt,
-    PlaygroundRFPContextChatPrompt,
     PlaygroundProposalSectionContextChatPrompt,
+    PlaygroundRFPContextChatPrompt,
 )
-from app.helper import get_trimmer_object, update_token_tracking
-from langchain_openai import ChatOpenAI
-from app.constents import ContextType
+from app.schema import ConversationState
+from app.summary_agent import summarize_history
 
 LOGGER = logging.getLogger("langgraph-nodes")
 
@@ -40,23 +35,11 @@ LOGGER = logging.getLogger("langgraph-nodes")
 # summary Nodes
 def route_summarize(state: ConversationState) -> str:
     msgs = state.get("messages", [])
-    current_token = state.get("tokens", {}).get("current_tokens", 0)
+    tokens = state.get("tokens")
+    current_token = tokens.get("current_tokens", 0) if tokens else 0
     if len(msgs) >= SUMMARY_TRIGGER_COUNT and current_token >= MAX_TOKENS_FOR_SUMMARY:
         return "summarize"
     return "chat"
-
-
-# helper
-def get_data_from_redis(source_id, key):
-    redis_data = ""
-    try:
-        from common import RedisService
-
-        if source_id:
-            redis_data = RedisService.fetch_rfp_data_from_redis(source_id, key) or ""
-    except Exception as e:
-        print(e)
-    return redis_data
 
 
 async def summarize_node(state: ConversationState):
@@ -76,8 +59,9 @@ async def summarize_node(state: ConversationState):
     summary_tokens = (usage or {}).get("total_tokens", 0)
 
     # Reset current tokens since we're summarizing (trimming history)
+    prior_total = prior_tokens.get("total_tokens", 0) if prior_tokens else 0
     merged_tokens = {
-        "total_tokens": prior_tokens.get("total_tokens", 0) + summary_tokens,
+        "total_tokens": prior_total + summary_tokens,
         "current_tokens": 0,  # Reset since we're summarizing
         "last_request_tokens": summary_tokens,
         "summarization_tokens": summary_tokens,
@@ -155,26 +139,28 @@ async def chat_node(state: ConversationState):
         ContextType.CONTENT: "PROPOSAL SECTIONS CONTENT",
     }
     prompt_text = " "
-    if has_contexts and contexts:
+    if has_contexts and contexts is not None:
         for context in contexts:
-            if contexts and "content" in context:
-                if data := get_data_from_redis(
+            if context and "content" in context:
+                _, data = get_context_data(
                     source_id=source_id, key=ContextType.CONTENT
-                ):
+                )
+                if data:
                     prompt_text += f"""
-                    Priorities below section content as user will mostly ask question on this sections 
                     [{context_mapping[ContextType.CONTENT]}]
                     {data}
                     """
             elif context in context_mapping:
-                if data := get_data_from_redis(source_id=source_id, key=context):
+                _, data = get_context_data(source_id=source_id, key=context)
+                if data:
                     section_header = context_mapping[context]
                     prompt_text += f"""
                     [{section_header}]
                     {data}
                     """
         prompt_args["section_context"] = prompt_text
-        prompt_args["rfp_context"] = get_data_from_redis(source_id, "user_summary")
+        _, rfp_context = get_context_data(source_id, "rfp_text")
+        prompt_args["rfp_context"] = rfp_context
     msgs = prompt_template.format_messages(**prompt_args)
 
     response: AIMessage = await model_chat.ainvoke(msgs)
