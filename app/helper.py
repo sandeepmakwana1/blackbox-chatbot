@@ -110,6 +110,10 @@ def _resolve_batch_bucket() -> Optional[str]:
 
 def get_data_from_redis(source_id, key):
     is_batch, batch_id, numeric_source_id = get_batch_context(source_id)
+    print("is_batch =========>", is_batch)
+    print("batch_id =========>", batch_id)
+    print("numeric_source_id =========>", numeric_source_id)
+
     redis_data = ""
     if not is_batch:
         try:
@@ -129,10 +133,12 @@ def get_data_from_redis(source_id, key):
             )
     else:
         bucket_name = _resolve_batch_bucket()
+        print("bucket_name =========>", bucket_name)
         if not bucket_name or not batch_id or numeric_source_id is None:
             return True, ""
 
         s3_suffix = BATCH_CONTEXT_PATHS.get(str(key))
+        print("s3_suffix =========>", s3_suffix)
         if not s3_suffix:
             LOGGER.warning(
                 "No batch S3 mapping defined for key=%s (source_id=%s)",
@@ -158,6 +164,7 @@ def get_data_from_redis(source_id, key):
         s3_key = f"{batch_id}/{numeric_source_id}/{s3_suffix}"
         try:
             redis_data = get_s3_data(s3_key, bucket_name)
+            print("s3 =========>", redis_data)
         except S3DataNotFoundError:
             LOGGER.warning(
                 "Batch context not found in S3 (source_id=%s, key=%s, s3_key=%s)",
