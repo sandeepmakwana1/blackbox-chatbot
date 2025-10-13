@@ -108,7 +108,7 @@ def _resolve_batch_bucket() -> Optional[str]:
     return None
 
 
-def get_data_from_redis(source_id, key):
+def get_context_data(source_id, key):
     is_batch, batch_id, numeric_source_id = get_batch_context(source_id)
     print("is_batch =========>", is_batch)
     print("batch_id =========>", batch_id)

@@ -17,7 +17,7 @@ from app.config import (
 )
 from app.constants import ContextType
 from app.helper import (
-    get_data_from_redis,
+    get_context_data,
     get_trimmer_object,
     update_token_tracking,
 )
@@ -142,7 +142,7 @@ async def chat_node(state: ConversationState):
     if has_contexts and contexts is not None:
         for context in contexts:
             if context and "content" in context:
-                _, data = get_data_from_redis(
+                _, data = get_context_data(
                     source_id=source_id, key=ContextType.CONTENT
                 )
                 if data:
@@ -151,7 +151,7 @@ async def chat_node(state: ConversationState):
                     {data}
                     """
             elif context in context_mapping:
-                _, data = get_data_from_redis(source_id=source_id, key=context)
+                _, data = get_context_data(source_id=source_id, key=context)
                 if data:
                     section_header = context_mapping[context]
                     prompt_text += f"""
@@ -159,7 +159,7 @@ async def chat_node(state: ConversationState):
                     {data}
                     """
         prompt_args["section_context"] = prompt_text
-        _, rfp_context = get_data_from_redis(source_id, "rfp_text")
+        _, rfp_context = get_context_data(source_id, "rfp_text")
         prompt_args["rfp_context"] = rfp_context
     msgs = prompt_template.format_messages(**prompt_args)
 
