@@ -14,9 +14,7 @@ from common.datastore import (
     S3DataNotFoundError,
     S3InvalidJSONError,
     S3OperationError,
-    check_s3_file_exists,
-    get_s3_data,
-    store_s3_data,
+    S3StoreService,
 )
 from common.decorators import measure_execution_time
 
@@ -33,9 +31,7 @@ __all__ = [
     "get_connection",
     "RedisManager",
     "RedisService",
-    "get_s3_data",
-    "store_s3_data",
-    "check_s3_file_exists",
+    "S3StoreService",
     "S3OperationError",
     "S3DataNotFoundError",
     "S3InvalidJSONError",
