@@ -7,8 +7,9 @@ class ConversationType:
 
 
 class ContextType:
-    VALIDATION_LEGAL: str = "validation_results"
-    VALIDATION_TECHNICAL: str = "validation_results"
+    VALIDATION_LEGAL: str = "validation_legal"
+    VALIDATION_TECHNICAL: str = "validation_technical"
+    VALIDATION_CHECKLIST: str = "validation_checklist"
     TABLE_OF_CONTENT: str = "table_of_content"
     DEEP_RESEARCH: str = "deep_research"
     USER_PREFERENCE: str = "user_preference"

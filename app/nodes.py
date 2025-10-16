@@ -133,6 +133,7 @@ async def chat_node(state: ConversationState):
         ContextType.COST_HR: "COST Hourly Wages",
         ContextType.VALIDATION_LEGAL: "VALIDATION LEGAL CHECK DATA",
         ContextType.VALIDATION_TECHNICAL: "VALIDATION TECHNICAL CHECK DATA",
+        ContextType.VALIDATION_CHECKLIST: "VALIDATION CHECKLIST",
         ContextType.TABLE_OF_CONTENT: "TABLE OF CONTENT",
         ContextType.DEEP_RESEARCH: "DEEP RESEARCH",
         ContextType.USER_PREFERENCE: "USER PREFERENCE",

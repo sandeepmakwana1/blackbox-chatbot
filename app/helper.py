@@ -42,7 +42,12 @@ def get_context_data(source_id, key):
         raise ValueError(
             "Bucket name could not be resolved for context data retrieval."
         )
-
+    if key in (
+        ContextType.VALIDATION_LEGAL,
+        ContextType.VALIDATION_TECHNICAL,
+        ContextType.VALIDATION_CHECKLIST,
+    ):
+        key = "validation_results"
     data = S3StoreService.get(
         bucket_name=bucket_name, source_id=source_id, stage_name=key
     )
