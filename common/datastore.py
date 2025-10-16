@@ -237,7 +237,16 @@ class S3StoreService:
         full_s3_key = cls._get_s3_full_key(source_id, stage_name, bucket_name)
         if full_s3_key is None:
             return False
-        return store_s3_data(full_s3_key, bucket_name, data)
+        is_stored = store_s3_data(full_s3_key, bucket_name, data)
+        if not is_stored:
+            logger.error(
+                "Failed to store data to S3: s3://%s/%s", bucket_name, full_s3_key
+            )
+            return False
+        logger.info(
+            "Successfully stored data to S3: s3://%s/%s", bucket_name, full_s3_key
+        )
+        return is_stored
 
     @classmethod
     def get(
@@ -251,8 +260,15 @@ class S3StoreService:
         s3_key = cls._get_s3_full_key(source_id, stage_name, bucket_name)
         if s3_key is None:
             raise S3OperationError("Cannot determine S3 key to fetch data")
-
-        return get_s3_data(s3_key, bucket_name)
+        data = get_s3_data(s3_key, bucket_name)
+        if not data:
+            raise S3DataNotFoundError(
+                f"Data not found in S3: s3://{bucket_name}/{s3_key}"
+            )
+        logger.info(
+            "Successfully fetched data from S3: s3://%s/%s", bucket_name, s3_key
+        )
+        return data
 
     @classmethod
     def is_exists(
