@@ -7,6 +7,19 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set. Export it before starting the app.")
 
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """
+    Read a boolean-like environment variable.
+
+    Accepts 1/true/yes/on (case-insensitive) as truthy values.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 DEFAULT_MODELS = {
     "chat": os.getenv("MODEL_CHAT", "gpt-4.1-2025-04-14"),
     "summarize": os.getenv("MODEL_SUMMARIZE", "gpt-4.1-mini"),
@@ -44,3 +57,10 @@ if not OPENAI_WEBHOOK_SECRET:
 OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "o4-mini")
 
 OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-4o-mini")
+
+# Braintrust instrumentation (optional)
+BRAINTRUST_API_KEY = os.getenv("BRAINTRUST_API_KEY")
+BRAINTRUST_PROJECT = os.getenv("BRAINTRUST_PROJECT", "BlackBox Playground-dev-test")
+BRAINTRUST_ENABLED = _env_flag(
+    "BRAINTRUST_ENABLED", default=bool(BRAINTRUST_API_KEY)
+)

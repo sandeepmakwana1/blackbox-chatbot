@@ -100,6 +100,11 @@ LOG_LEVEL=INFO
 
 # Optional: External Services
 SEARCH_API_KEY=your-search-api-key  # For web search functionality
+
+# Optional: Braintrust Telemetry
+BRAINTRUST_API_KEY=bt-your-api-key
+BRAINTRUST_PROJECT=BlackBox Playground
+BRAINTRUST_ENABLED=true
 ```
 
 ### 5. Database Initialization
@@ -159,6 +164,12 @@ For deep research functionality, you need to configure OpenAI webhooks:
 1. Set `OPENAI_WEBHOOK_SECRET` in your environment
 2. The webhook endpoint is automatically exposed at `/webhook/openai`
 3. OpenAI will call this endpoint with research results
+
+### Braintrust Telemetry (Optional)
+
+- Braintrust logging automatically activates when `BRAINTRUST_API_KEY` is set. Override the project name with `BRAINTRUST_PROJECT` or disable explicitly with `BRAINTRUST_ENABLED=false`.
+- Install the standard dependencies (`braintrust`, `braintrust-langchain`) via `pip install -r requirements.txt`.
+- Logged runs appear in the configured Braintrust project with LangChain traces.
 
 ## Quick Start Test
 

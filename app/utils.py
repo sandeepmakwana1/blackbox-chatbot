@@ -44,6 +44,7 @@ from app.helper import (
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
 from app.graph_builder import build_graph, validate_conversation_type
+from app.braintrust_integration import setup_braintrust_logging
 
 from dotenv import load_dotenv
 
@@ -94,6 +95,9 @@ class ChatService:
         self._is_initialized = False
         self._initialization_lock = asyncio.Lock()
         self._current_graph_type = "chat"  # Track current graph type
+
+        # Initialize Braintrust telemetry if available.
+        setup_braintrust_logging()
 
     # -------------------------- Conversation graph ---------------------------
 
