@@ -12,90 +12,18 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages.utils import trim_messages
 from openai import APIConnectionError, APITimeoutError, OpenAIError, RateLimitError
 
-# Your app-specific prompts/config
-from app.chat_manager import ChatManager
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
-from app.constants import BATCH_CONTEXT_PATHS
 from app.schema import ConversationState
+
+from common.datastore import (
+    S3StoreService,
+)
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("langgraph-playground")
 
 
-_chat_manager_instance: Optional[ChatManager] = None
-
-
-def get_chat_manager() -> ChatManager:
-    """Return a singleton ChatManager instance for shared DB access."""
-    global _chat_manager_instance
-    if _chat_manager_instance is None:
-        _chat_manager_instance = ChatManager()
-    return _chat_manager_instance
-
-
-def _normalize_source_id(raw_source_id) -> Optional[int]:
-    if not raw_source_id:
-        return None
-    try:
-        return int(raw_source_id)
-    except (TypeError, ValueError):
-        return None
-
-
-@lru_cache(maxsize=256)
-def _get_batch_info(numeric_source_id: int) -> Tuple[bool, Optional[str]]:
-    try:
-        manager = get_chat_manager()
-    except Exception as exc:  # pragma: no cover - defensive logging
-        LOGGER.error(
-            "Failed to initialize ChatManager for batch status lookup: %s",
-            exc,
-            exc_info=True,
-        )
-        return False, None
-
-    is_batch = False
-    batch_id: Optional[str] = None
-    try:
-        with manager.get_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "SELECT batch_id FROM track WHERE source_id = %s LIMIT 1",
-                    (numeric_source_id,),
-                )
-                row = cursor.fetchone()
-                if row is None:
-                    batch_id = None
-                elif isinstance(row, (list, tuple)):
-                    batch_id = row[0]
-                elif isinstance(row, dict):
-                    batch_id = row.get("batch_id")
-                else:
-                    batch_id = getattr(row, "batch_id", None)
-                batch_id = str(batch_id) if batch_id else None
-                is_batch = bool(batch_id)
-    except Exception as exc:
-        LOGGER.error(
-            "Failed to determine batch status for source_id=%s: %s",
-            numeric_source_id,
-            exc,
-            exc_info=True,
-        )
-        is_batch = False
-        batch_id = None
-
-    return is_batch, batch_id
-
-
-def get_batch_context(source_id) -> Tuple[bool, Optional[str], Optional[int]]:
-    numeric_source_id = _normalize_source_id(source_id)
-    if numeric_source_id is None:
-        return False, None, None
-    is_batch, batch_id = _get_batch_info(numeric_source_id)
-    return is_batch, batch_id, numeric_source_id
-
-
-def _resolve_batch_bucket() -> Optional[str]:
+def _resolve_bucket_name() -> Optional[str]:
     bucket = os.getenv("AWS_BATCH_S3_BUCKET")
     if bucket:
         return bucket
@@ -109,91 +37,16 @@ def _resolve_batch_bucket() -> Optional[str]:
 
 
 def get_context_data(source_id, key):
-    is_batch, batch_id, numeric_source_id = get_batch_context(source_id)
-    print("is_batch =========>", is_batch)
-    print("batch_id =========>", batch_id)
-    print("numeric_source_id =========>", numeric_source_id)
+    bucket_name = _resolve_bucket_name()
+    if not bucket_name:
+        raise ValueError(
+            "Bucket name could not be resolved for context data retrieval."
+        )
 
-    redis_data = ""
-    if not is_batch:
-        try:
-            from common import RedisService
-
-            if source_id:
-                redis_data = (
-                    RedisService.fetch_rfp_data_from_redis(source_id, key) or ""
-                )
-        except Exception as exc:
-            LOGGER.error(
-                "Failed to get data from Redis for source_id=%s, key=%s: %s",
-                source_id,
-                key,
-                exc,
-                exc_info=True,
-            )
-    else:
-        bucket_name = _resolve_batch_bucket()
-        print("bucket_name =========>", bucket_name)
-        if not bucket_name or not batch_id or numeric_source_id is None:
-            return True, ""
-
-        s3_suffix = BATCH_CONTEXT_PATHS.get(str(key))
-        print("s3_suffix =========>", s3_suffix)
-        if not s3_suffix:
-            LOGGER.warning(
-                "No batch S3 mapping defined for key=%s (source_id=%s)",
-                key,
-                source_id,
-            )
-            return True, ""
-
-        try:
-            from common.datastore import (
-                S3DataNotFoundError,
-                S3OperationError,
-                get_s3_data,
-            )
-        except Exception as exc:
-            LOGGER.error(
-                "Failed to import S3 datastore helpers for batch context lookup: %s",
-                exc,
-                exc_info=True,
-            )
-            return True, ""
-
-        s3_key = f"{batch_id}/{numeric_source_id}/{s3_suffix}"
-        try:
-            redis_data = get_s3_data(s3_key, bucket_name)
-            print("s3 =========>", redis_data)
-        except S3DataNotFoundError:
-            LOGGER.warning(
-                "Batch context not found in S3 (source_id=%s, key=%s, s3_key=%s)",
-                numeric_source_id,
-                key,
-                s3_key,
-            )
-            redis_data = ""
-        except S3OperationError as exc:
-            LOGGER.error(
-                "S3 operation failed for batch context (source_id=%s, key=%s, s3_key=%s): %s",
-                numeric_source_id,
-                key,
-                s3_key,
-                exc,
-                exc_info=True,
-            )
-            redis_data = ""
-        except Exception as exc:  # pragma: no cover - unexpected failure handling
-            LOGGER.error(
-                "Unexpected error when fetching batch context from S3 (source_id=%s, key=%s, s3_key=%s): %s",
-                numeric_source_id,
-                key,
-                s3_key,
-                exc,
-                exc_info=True,
-            )
-            redis_data = ""
-    return is_batch, redis_data
+    data = S3StoreService.get(
+        bucket_name=bucket_name, source_id=source_id, stage_name=key
+    )
+    return data
 
 
 def update_token_tracking(
