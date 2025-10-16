@@ -48,9 +48,16 @@ def get_context_data(source_id, key):
         ContextType.VALIDATION_CHECKLIST,
     ):
         key = ContextType.VALIDATION_RESULTS
-    data = S3StoreService.get(
-        bucket_name=bucket_name, source_id=source_id, stage_name=key
-    )
+    try:
+        data = S3StoreService.get(
+            bucket_name=bucket_name, source_id=source_id, stage_name=key
+        )
+    except Exception as e:
+        LOGGER.error(
+            f"Error retrieving context data from S3: {e}",
+            extra={"bucket": bucket_name, "source_id": source_id, "stage_name": key},
+        )
+        data = ""
     return data
 
 
