@@ -30,7 +30,7 @@ def get_elastic_config() -> Dict[str, Any]:
 S3_PATH_TEMPLATES: Dict[str, str] = {
     "rfp_text": "{source_id}/rfp_text.json",
     "prompt_data": "{source_id}/prompt_data.json",
-    "validation_result": "{source_id}/stage/validation/validation_results.json",
+    "validation_results": "{source_id}/stage/validation/validation_results.json",
     "deep_research": "{source_id}/stage/deep_research/deep_research.json",
     "deep_research_queries": "{source_id}/stage/deep_research/deep_research_queries.json",
     "company_data": "{source_id}/stage/pre_steps/company_data.json",
