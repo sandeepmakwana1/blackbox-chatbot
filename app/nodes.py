@@ -142,16 +142,14 @@ async def chat_node(state: ConversationState):
     if has_contexts and contexts is not None:
         for context in contexts:
             if context and "content" in context:
-                _, data = get_context_data(
-                    source_id=source_id, key=ContextType.CONTENT
-                )
+                data = get_context_data(source_id=source_id, key=ContextType.CONTENT)
                 if data:
                     prompt_text += f"""
                     [{context_mapping[ContextType.CONTENT]}]
                     {data}
                     """
             elif context in context_mapping:
-                _, data = get_context_data(source_id=source_id, key=context)
+                data = get_context_data(source_id=source_id, key=context)
                 if data:
                     section_header = context_mapping[context]
                     prompt_text += f"""
@@ -159,7 +157,7 @@ async def chat_node(state: ConversationState):
                     {data}
                     """
         prompt_args["section_context"] = prompt_text
-        _, rfp_context = get_context_data(source_id, "rfp_text")
+        rfp_context = get_context_data(source_id, "rfp_text")
         prompt_args["rfp_context"] = rfp_context
     msgs = prompt_template.format_messages(**prompt_args)
 
