@@ -14,7 +14,7 @@ from openai import APIConnectionError, APITimeoutError, OpenAIError, RateLimitEr
 
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
 from app.schema import ConversationState
-
+from app.constants import ContextType
 from common.datastore import (
     S3StoreService,
 )
