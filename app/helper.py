@@ -14,7 +14,7 @@ from openai import APIConnectionError, APITimeoutError, OpenAIError, RateLimitEr
 
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
 from app.schema import ConversationState
-
+from app.constants import ContextType
 from common.datastore import (
     S3StoreService,
 )
@@ -42,10 +42,22 @@ def get_context_data(source_id, key):
         raise ValueError(
             "Bucket name could not be resolved for context data retrieval."
         )
-
-    data = S3StoreService.get(
-        bucket_name=bucket_name, source_id=source_id, stage_name=key
-    )
+    if key in (
+        ContextType.VALIDATION_LEGAL,
+        ContextType.VALIDATION_TECHNICAL,
+        ContextType.VALIDATION_CHECKLIST,
+    ):
+        key = ContextType.VALIDATION_RESULTS
+    try:
+        data = S3StoreService.get(
+            bucket_name=bucket_name, source_id=source_id, stage_name=key
+        )
+    except Exception as e:
+        LOGGER.error(
+            f"Error retrieving context data from S3: {e}",
+            extra={"bucket": bucket_name, "source_id": source_id, "stage_name": key},
+        )
+        data = ""
     return data
 
 
