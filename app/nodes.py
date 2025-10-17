@@ -142,7 +142,7 @@ async def chat_node(state: ConversationState):
     prompt_text = " "
     if has_contexts and contexts is not None:
         for context in contexts:
-            if context and "content" in context:
+            if context and "content" == context:
                 data = get_context_data(source_id=source_id, key=ContextType.CONTENT)
                 if data:
                     prompt_text += f"""
