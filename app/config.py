@@ -13,6 +13,9 @@ DEFAULT_MODELS = {
     "research": os.getenv("MODEL_RESEARCH", "gpt-4o"),
     "embed": os.getenv("MODEL_EMBED", "text-embedding-3-large"),
     "research_plain": os.getenv("MODEL_RESEARCH_PLAIN", "gpt-4.1-2025-04-14"),
+    "deep_agent": os.getenv(
+        "MODEL_DEEP_AGENT", os.getenv("MODEL_CHAT", "gpt-4.1-2025-04-14")
+    ),
 }
 # Token tracking only - no pricing needed
 
@@ -35,6 +38,7 @@ POSTGRES_PORT = os.getenv("POSTGRES_PORT")
 
 # Deep Research Configuration
 CONV_TYPE_DEEP_RESEARCH = "deep-research"
+CONV_TYPE_DEEP_AGENT = "deep-agent"
 OPENAI_WEBHOOK_SECRET = os.getenv("OPENAI_WEBHOOK_SECRET")
 if not OPENAI_WEBHOOK_SECRET:
     raise RuntimeError(
@@ -44,3 +48,8 @@ if not OPENAI_WEBHOOK_SECRET:
 OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "o4-mini")
 
 OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-4o-mini")
+
+# Deep Agent / MCP configuration
+MCP_SERVER_CONFIG = os.getenv("MCP_SERVER_CONFIG", "")
+MCP_SERVER_TIMEOUT = int(os.getenv("MCP_SERVER_TIMEOUT", "30"))
+DEEP_AGENT_ROOT = os.getenv("DEEP_AGENT_ROOT", "tmp/deep_agent_workspace")

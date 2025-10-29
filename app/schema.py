@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing_extensions import TypedDict
-from typing import Annotated, Dict, List, Optional, Sequence
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 from langchain_core.messages import (
     BaseMessage,
 )
@@ -14,7 +14,7 @@ class ConversationState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     summary_context: NotRequired[Sequence[BaseMessage]]
     user_id: str
-    conversation_type: str  # "chat" | "search"| "document_qa" | "deep-research"
+    conversation_type: str  # "chat" | "search"| "document_qa" | "deep-research" | "deep-agent"
     tool: Optional[str]
     contexts: Optional[List[Optional[str]]]
     language: str
@@ -29,6 +29,10 @@ class ConversationState(TypedDict):
         Optional[bool]
     ]  # Flag to indicate research has been initiated
     tokens: Optional[Dict]
+    todos: NotRequired[Optional[List[Dict[str, Any]]]]
+    filesystem_events: NotRequired[Optional[List[Dict[str, Any]]]]
+    delegated_tasks: NotRequired[Optional[List[Dict[str, Any]]]]
+    deep_agent_metadata: NotRequired[Optional[Dict[str, Any]]]
 
 
 class PromptOptimizerInput(BaseModel):

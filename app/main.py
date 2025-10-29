@@ -17,7 +17,8 @@ from langchain_core.messages import AIMessage
 from app.helper import serialize_content_to_string
 from app.chat_manager import ChatManager
 from app.websocket_manager import WebSocketConnectionManager
-from app.store import get_record
+from app.store import add_record, get_record, update_record
+from app.constants import ConversationType
 from pydantic import BaseModel
 from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
@@ -134,6 +135,34 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
                 contexts=contexts,
             ):
                 await websocket.send_text(json.dumps(chunk))
+                if (
+                    conversation_type == ConversationType.DEEP_AGENT
+                    and isinstance(chunk, dict)
+                ):
+                    chunk_type = chunk.get("type")
+                    if chunk_type in ("deep_agent_todos", "deep_agent_fs"):
+                        updates = {
+                            "deep_agent_last_update": datetime.utcnow().isoformat(),
+                        }
+                        if chunk_type == "deep_agent_todos":
+                            updates["deep_agent_todos"] = list(chunk.get("content", []))
+                            updates["status"] = "planning"
+                        else:
+                            updates["deep_agent_fs_events"] = list(
+                                chunk.get("content", [])
+                            )
+
+                        record = get_record(thread_id)
+                        if record:
+                            update_record(thread_id, updates)
+                        else:
+                            add_record(
+                                {
+                                    "thread_id": thread_id,
+                                    "user_id": user_id,
+                                    **updates,
+                                }
+                            )
 
             # Get current chat state and update activity
             chat = chat_manager.get_chat(user_id, thread_id)
@@ -308,7 +337,6 @@ async def webhook(request: Request, bg: BackgroundTasks):
                 )
                 return
 
-            from app.store import update_record
             import time
 
             # Update Redis record
@@ -347,7 +375,6 @@ async def webhook(request: Request, bg: BackgroundTasks):
                 )
                 return
 
-            from app.store import update_record
             import time
 
             # Update Redis record

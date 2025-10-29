@@ -6,6 +6,7 @@ click==8.2.1
 distro==1.9.0
 dnspython==2.7.0
 email_validator==2.2.0
+deepagents==0.1.2
 fastapi==0.116.1
 fastapi-cli==0.0.8
 fastapi-cloud-cli==0.1.5
@@ -22,6 +23,7 @@ jsonpointer==3.0.0
 langchain==0.3.27
 langchain-core==0.3.74
 langchain-openai==0.3.30
+langchain-mcp-adapters==0.1.11
 langchain-text-splitters==0.3.9
 langgraph==0.6.6
 langgraph-checkpoint==2.1.1

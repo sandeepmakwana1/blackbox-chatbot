@@ -11,7 +11,7 @@ from langgraph.graph import START, END, StateGraph
 from langgraph.constants import START as LANGGRAPH_START
 
 from app.schema import ConversationState
-from app.config import CONV_TYPE_DEEP_RESEARCH
+from app.config import CONV_TYPE_DEEP_AGENT, CONV_TYPE_DEEP_RESEARCH
 from app.nodes import route_summarize, summarize_node, chat_node
 from app.deep_research import (
     deepresearch_plaining_node,
@@ -145,6 +145,7 @@ def get_available_conversation_types() -> Dict[str, str]:
         "chat": "Standard conversational chat with summarization support",
         "web": "Chat with web search capabilities",
         CONV_TYPE_DEEP_RESEARCH: "Deep research with planning and background execution",
+        CONV_TYPE_DEEP_AGENT: "Deep agent with planning, filesystem, and MCP tooling",
         "search": "Search-focused conversations",
         "document_qa": "Document question and answer sessions",
     }

@@ -4,6 +4,8 @@ class PlaygroundTools:
 
 class ConversationType:
     CHAT: str = "chat"
+    DEEP_RESEARCH: str = "deep-research"
+    DEEP_AGENT: str = "deep-agent"
 
 
 class ContextType:

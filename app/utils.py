@@ -44,6 +44,8 @@ from app.helper import (
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
 from app.graph_builder import build_graph, validate_conversation_type
+from app.constants import ConversationType
+from app.deep_agent import DeepAgentRunner
 
 from dotenv import load_dotenv
 
@@ -90,6 +92,7 @@ class ChatService:
         # services - will be initialized asynchronously
         self.app = None
         self.checkpointer = None
+        self.deep_agent_runner: Optional[DeepAgentRunner] = None
         self._checkpointer_cm = None
         self._is_initialized = False
         self._initialization_lock = asyncio.Lock()
@@ -128,6 +131,7 @@ class ChatService:
                 # Build a default chat graph - will be rebuilt per conversation type as needed
                 graph = build_graph("chat")
                 self.app = graph.compile(checkpointer=self.checkpointer)
+                self.deep_agent_runner = DeepAgentRunner(self.checkpointer)
                 self._is_initialized = True
                 LOGGER.info("ChatService initialized successfully")
 
@@ -146,6 +150,7 @@ class ChatService:
             finally:
                 self._checkpointer_cm = None
                 self.checkpointer = None
+                self.deep_agent_runner = None
 
     async def _validate_connection(self):
         """Validate database connection and reinitialize if needed."""
@@ -170,11 +175,18 @@ class ChatService:
             )
             conversation_type = "chat"
 
+        if conversation_type == ConversationType.DEEP_AGENT:
+            if self.deep_agent_runner is None and self.checkpointer is not None:
+                self.deep_agent_runner = DeepAgentRunner(self.checkpointer)
+            return
+
         # For deep-research, we need the full graph. For others, we can use a simpler one.
         # But since deep-research graph includes all paths, we'll use it for deep-research
         # and the standard graph for others.
         required_graph_type = (
-            "deep-research" if conversation_type == "deep-research" else "standard"
+            "deep-research"
+            if conversation_type == ConversationType.DEEP_RESEARCH
+            else "standard"
         )
 
         if self._current_graph_type != required_graph_type:
@@ -210,6 +222,22 @@ class ChatService:
         """
         await self._validate_connection()
         await self._ensure_graph_for_conversation_type(conversation_type)
+
+        if conversation_type == ConversationType.DEEP_AGENT:
+            if self.deep_agent_runner is None:
+                raise RuntimeError("Deep agent runner is not initialised")
+            result = await self.deep_agent_runner.invoke(
+                message=message,
+                thread_id=thread_id,
+                user_id=user_id,
+                language=language,
+                contexts=contexts,
+            )
+            return {
+                "response": result.get("content", ""),
+                "token_usage": result.get("token_usage", {}),
+                "thread_id": thread_id,
+            }
 
         config = {"configurable": {"thread_id": thread_id}}
 
@@ -276,6 +304,21 @@ class ChatService:
         """
         await self._validate_connection()
         await self._ensure_graph_for_conversation_type(conversation_type)
+
+        if conversation_type == ConversationType.DEEP_AGENT:
+            if self.deep_agent_runner is None:
+                raise RuntimeError("Deep agent runner is not initialised")
+            yield {"type": "start", "content": "", "conversation_type": conversation_type}
+            async for chunk in self.deep_agent_runner.stream(
+                message=message,
+                thread_id=thread_id,
+                user_id=user_id,
+                language=language,
+                contexts=contexts,
+            ):
+                yield chunk
+            return
+
         config = {"configurable": {"thread_id": thread_id}}
 
         # Get existing state to preserve token tracking and check for interrupts
