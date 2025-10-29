@@ -61,6 +61,4 @@ OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-4o-mini")
 # Braintrust instrumentation (optional)
 BRAINTRUST_API_KEY = os.getenv("BRAINTRUST_API_KEY")
 BRAINTRUST_PROJECT = os.getenv("BRAINTRUST_PROJECT", "BlackBox Playground-dev-test")
-BRAINTRUST_ENABLED = _env_flag(
-    "BRAINTRUST_ENABLED", default=bool(BRAINTRUST_API_KEY)
-)
+BRAINTRUST_ENABLED = _env_flag("BRAINTRUST_ENABLED", default=False)

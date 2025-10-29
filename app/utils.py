@@ -99,6 +99,69 @@ class ChatService:
         # Initialize Braintrust telemetry if available.
         setup_braintrust_logging()
 
+    @staticmethod
+    def _summarize_contexts(contexts: Sequence[Any]) -> List[str]:
+        """Return lightweight context identifiers for telemetry metadata."""
+        labels: List[str] = []
+        for context in contexts or []:
+            if isinstance(context, str):
+                labels.append(context)
+            elif isinstance(context, dict):
+                for key in ("name", "type", "id", "key"):
+                    value = context.get(key)
+                    if value:
+                        labels.append(str(value))
+                        break
+        return labels[:10]
+
+    def _build_run_config(
+        self,
+        *,
+        thread_id: str,
+        user_id: str,
+        conversation_type: str,
+        language: str,
+        tool: str,
+        contexts: Sequence[Any],
+    ) -> Dict[str, Any]:
+        """Construct a LangChain config block with Braintrust metadata."""
+        config: Dict[str, Any] = {"configurable": {"thread_id": thread_id}}
+
+        metadata: Dict[str, Any] = {
+            "thread_id": thread_id,
+            "user_id": user_id,
+            "conversation_type": conversation_type,
+            "language": language,
+        }
+        if tool:
+            metadata["tool"] = tool
+
+        context_labels = self._summarize_contexts(contexts)
+        if context_labels:
+            metadata["contexts"] = context_labels
+
+        # Drop empty values to keep logs tidy
+        metadata = {
+            key: value
+            for key, value in metadata.items()
+            if value not in (None, "", [], {})
+        }
+        if metadata:
+            config["metadata"] = metadata
+
+        tags = []
+        if conversation_type:
+            tags.append(f"conversation:{conversation_type}")
+        if tool:
+            tags.append(f"tool:{tool}")
+        if language:
+            tags.append(f"lang:{language.lower()}")
+
+        if tags:
+            config["tags"] = tags
+
+        return config
+
     # -------------------------- Conversation graph ---------------------------
 
     async def initialize(self):
@@ -215,7 +278,14 @@ class ChatService:
         await self._validate_connection()
         await self._ensure_graph_for_conversation_type(conversation_type)
 
-        config = {"configurable": {"thread_id": thread_id}}
+        config = self._build_run_config(
+            thread_id=thread_id,
+            user_id=user_id,
+            conversation_type=conversation_type,
+            language=language,
+            tool=tool,
+            contexts=contexts,
+        )
 
         # Get existing state to preserve token tracking with retry
         try:
@@ -280,7 +350,14 @@ class ChatService:
         """
         await self._validate_connection()
         await self._ensure_graph_for_conversation_type(conversation_type)
-        config = {"configurable": {"thread_id": thread_id}}
+        config = self._build_run_config(
+            thread_id=thread_id,
+            user_id=user_id,
+            conversation_type=conversation_type,
+            language=language,
+            tool=tool,
+            contexts=contexts,
+        )
 
         # Get existing state to preserve token tracking and check for interrupts
         existing_state = None

@@ -167,7 +167,7 @@ For deep research functionality, you need to configure OpenAI webhooks:
 
 ### Braintrust Telemetry (Optional)
 
-- Braintrust logging automatically activates when `BRAINTRUST_API_KEY` is set. Override the project name with `BRAINTRUST_PROJECT` or disable explicitly with `BRAINTRUST_ENABLED=false`.
+- Braintrust logging is controlled via `BRAINTRUST_ENABLED`. Set `BRAINTRUST_ENABLED=true` along with `BRAINTRUST_API_KEY` to forward traces. Override the project name with `BRAINTRUST_PROJECT` or set `BRAINTRUST_ENABLED=false` to keep telemetry disabled.
 - Install the standard dependencies (`braintrust`, `braintrust-langchain`) via `pip install -r requirements.txt`.
 - Logged runs appear in the configured Braintrust project with LangChain traces.
 

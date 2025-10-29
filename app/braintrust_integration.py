@@ -90,7 +90,7 @@ def setup_braintrust_logging() -> Optional[object]:
                     output=output,
                     expected=expected,
                     error=error,
-                    tags=None,
+                    tags=tags,
                     scores=scores,
                     metadata={
                         **({"tags": tags} if tags else {}),
@@ -122,7 +122,9 @@ def setup_braintrust_logging() -> Optional[object]:
         _handler = SafeBraintrustCallbackHandler()
         set_global_handler(_handler)
         _initialized = True
-        LOGGER.info("Braintrust logging initialized for project '%s'", BRAINTRUST_PROJECT)
+        LOGGER.info(
+            "Braintrust logging initialized for project '%s'", BRAINTRUST_PROJECT
+        )
         return _handler
     except Exception:  # pragma: no cover - defensive logging
         LOGGER.exception("Failed to initialize Braintrust logging.")
