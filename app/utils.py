@@ -11,6 +11,7 @@ import os
 import logging
 import asyncio
 import json
+import re
 from datetime import datetime
 from typing import List, Dict, Optional, Sequence, Annotated, Any
 
@@ -51,6 +52,17 @@ load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("langgraph-app")
+
+
+_WHITESPACE_TOKEN_PATTERN = re.compile(r"\s+|\S+")
+
+
+def _iter_preserving_whitespace(text: str):
+    """Yield successive segments while keeping original whitespace intact."""
+    for match in _WHITESPACE_TOKEN_PATTERN.finditer(text):
+        segment = match.group(0)
+        if segment:
+            yield segment
 
 
 # -----------------------------------------------------------------------------
@@ -360,26 +372,14 @@ class ChatService:
                                             ]
                                             full_response = content_str
 
-                                            if new_content.strip():
-                                                # yield {"type": "chunk", "content": content_str}
-                                                # Simulate streaming by breaking content into words
-                                                words = new_content.split()
-                                                for i, word in enumerate(words):
-                                                    if i == 0:
-                                                        yield {
-                                                            "type": "chunk",
-                                                            "content": word,
-                                                        }
-                                                    elif "-" in word:
-                                                        yield {
-                                                            "type": "chunk",
-                                                            "content": "\n" + word,
-                                                        }
-                                                    else:
-                                                        yield {
-                                                            "type": "chunk",
-                                                            "content": " " + word,
-                                                        }
+                                            if new_content:
+                                                for segment in _iter_preserving_whitespace(
+                                                    new_content
+                                                ):
+                                                    yield {
+                                                        "type": "chunk",
+                                                        "content": segment,
+                                                    }
 
                                 existing_messages_count = len(messages)
 
@@ -496,22 +496,14 @@ class ChatService:
                                     new_content = content_str[len(full_response) :]
                                     full_response = content_str
 
-                                    if new_content.strip():
-                                        # Simulate streaming by breaking content into words
-                                        words = new_content.split()
-                                        for i, word in enumerate(words):
-                                            if i == 0:
-                                                yield {"type": "chunk", "content": word}
-                                            elif "-" in word:
-                                                yield {
-                                                    "type": "chunk",
-                                                    "content": "\n" + word,
-                                                }
-                                            else:
-                                                yield {
-                                                    "type": "chunk",
-                                                    "content": " " + word,
-                                                }
+                                    if new_content:
+                                        for segment in _iter_preserving_whitespace(
+                                            new_content
+                                        ):
+                                            yield {
+                                                "type": "chunk",
+                                                "content": segment,
+                                            }
 
                         # Update the last sent index
                         last_sent_index = len(messages)
