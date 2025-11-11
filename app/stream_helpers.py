@@ -37,7 +37,20 @@ def split_stream_segments(delta: str) -> Tuple[str, ...]:
 
     if not delta:
         return tuple()
-    return tuple(_iter_preserving_whitespace(delta))
+    pending_ws = ""
+    segments = []
+    for token in _iter_preserving_whitespace(delta):
+        if token.isspace():
+            pending_ws += token
+        else:
+            segments.append(pending_ws + token)
+            pending_ws = ""
+
+    if pending_ws:
+        # Trailing whitespace with no following token
+        segments.append(pending_ws)
+
+    return tuple(segments)
 
 
 def merge_cumulative_or_delta(
