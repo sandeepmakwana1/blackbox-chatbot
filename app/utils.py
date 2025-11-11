@@ -41,7 +41,11 @@ from app.helper import (
     update_token_tracking,
     serialize_content_to_string,
 )
-from app.stream_helpers import diff_stream_segments, validate_stream_consistency
+from app.stream_helpers import (
+    diff_stream_segments,
+    validate_stream_consistency,
+    split_stream_segments,
+)
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
 from app.graph_builder import build_graph, validate_conversation_type
@@ -416,10 +420,8 @@ class ChatService:
                                 content_str = serialize_content_to_string(content)
 
                                 if content_str:
-                                    full_response, segments = diff_stream_segments(
-                                        full_response, content_str
-                                    )
-                                    for segment in segments:
+                                    full_response += content_str
+                                    for segment in split_stream_segments(content_str):
                                         yield {"type": "chunk", "content": segment}
 
                     final_state = await self.app.aget_state(config)
@@ -572,10 +574,8 @@ class ChatService:
                         content_str = serialize_content_to_string(content)
 
                         if content_str:
-                            full_response, segments = diff_stream_segments(
-                                full_response, content_str
-                            )
-                            for segment in segments:
+                            full_response += content_str
+                            for segment in split_stream_segments(content_str):
                                 yield {"type": "chunk", "content": segment}
 
                 final_state = await self.app.aget_state(config)
