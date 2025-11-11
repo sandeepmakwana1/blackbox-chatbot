@@ -45,6 +45,7 @@ from app.stream_helpers import (
     diff_stream_segments,
     validate_stream_consistency,
     split_stream_segments,
+    merge_cumulative_or_delta,
 )
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
@@ -385,7 +386,7 @@ class ChatService:
 
                                         if content_str:
                                             full_response, segments = (
-                                                diff_stream_segments(
+                                                merge_cumulative_or_delta(
                                                     full_response, content_str
                                                 )
                                             )
@@ -420,8 +421,10 @@ class ChatService:
                                 content_str = serialize_content_to_string(content)
 
                                 if content_str:
-                                    full_response += content_str
-                                    for segment in split_stream_segments(content_str):
+                                    full_response, segments = merge_cumulative_or_delta(
+                                        full_response, content_str
+                                    )
+                                    for segment in segments:
                                         yield {"type": "chunk", "content": segment}
 
                     final_state = await self.app.aget_state(config)
@@ -509,8 +512,10 @@ class ChatService:
 
                                 # Calculate the new content delta
                                 if content_str:
-                                    full_response, segments = diff_stream_segments(
-                                        full_response, content_str
+                                    full_response, segments = (
+                                        merge_cumulative_or_delta(
+                                            full_response, content_str
+                                        )
                                     )
                                     for segment in segments:
                                         yield {
@@ -574,8 +579,10 @@ class ChatService:
                         content_str = serialize_content_to_string(content)
 
                         if content_str:
-                            full_response += content_str
-                            for segment in split_stream_segments(content_str):
+                            full_response, segments = merge_cumulative_or_delta(
+                                full_response, content_str
+                            )
+                            for segment in segments:
                                 yield {"type": "chunk", "content": segment}
 
                 final_state = await self.app.aget_state(config)

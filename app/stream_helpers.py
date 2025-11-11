@@ -40,6 +40,22 @@ def split_stream_segments(delta: str) -> Tuple[str, ...]:
     return tuple(_iter_preserving_whitespace(delta))
 
 
+def merge_cumulative_or_delta(
+    current: str, incoming: str
+) -> Tuple[str, Tuple[str, ...]]:
+    """Handle either cumulative or delta chunks gracefully."""
+
+    if not incoming:
+        return current, tuple()
+
+    updated, segments = diff_stream_segments(current, incoming)
+    if segments:
+        return updated, segments
+
+    # Treat as delta-only content
+    return current + incoming, split_stream_segments(incoming)
+
+
 def validate_stream_consistency(streamed: str, final: str) -> bool:
     """Ensure streamed content matches what is persisted or returned later."""
 
