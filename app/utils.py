@@ -11,7 +11,6 @@ import os
 import logging
 import asyncio
 import json
-import re
 from datetime import datetime
 from typing import List, Dict, Optional, Sequence, Annotated, Any
 
@@ -42,6 +41,7 @@ from app.helper import (
     update_token_tracking,
     serialize_content_to_string,
 )
+from app.stream_helpers import diff_stream_segments, validate_stream_consistency
 from app.summary_agent import summarize_history
 from app.nodes import route_summarize, summarize_node, chat_node
 from app.graph_builder import build_graph, validate_conversation_type
@@ -54,15 +54,30 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("langgraph-app")
 
 
-_WHITESPACE_TOKEN_PATTERN = re.compile(r"\s+|\S+")
+def _latest_persisted_ai_content(messages: Sequence[BaseMessage]) -> str:
+    """Return the most recent AI message content as a string for validation."""
+
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage) and hasattr(msg, "content"):
+            return serialize_content_to_string(msg.content)
+    return ""
 
 
-def _iter_preserving_whitespace(text: str):
-    """Yield successive segments while keeping original whitespace intact."""
-    for match in _WHITESPACE_TOKEN_PATTERN.finditer(text):
-        segment = match.group(0)
-        if segment:
-            yield segment
+def _sync_stream_with_persisted(
+    final_state: ConversationState, streamed_text: str
+) -> str:
+    """Ensure the streamed text matches what the graph persisted/logged."""
+
+    try:
+        messages = final_state.values.get("messages", [])
+    except AttributeError:
+        return streamed_text
+
+    persisted = _latest_persisted_ai_content(messages)
+    if persisted and not validate_stream_consistency(streamed_text, persisted):
+        LOGGER.debug("Streamed content differed from persisted state; using persisted")
+        return persisted
+    return streamed_text
 
 
 # -----------------------------------------------------------------------------
@@ -364,22 +379,17 @@ class ChatService:
                                         ):
                                             research_initiated_sent = True
 
-                                        if content_str and len(content_str) > len(
-                                            full_response
-                                        ):
-                                            new_content = content_str[
-                                                len(full_response) :
-                                            ]
-                                            full_response = content_str
-
-                                            if new_content:
-                                                for segment in _iter_preserving_whitespace(
-                                                    new_content
-                                                ):
-                                                    yield {
-                                                        "type": "chunk",
-                                                        "content": segment,
-                                                    }
+                                        if content_str:
+                                            full_response, segments = (
+                                                diff_stream_segments(
+                                                    full_response, content_str
+                                                )
+                                            )
+                                            for segment in segments:
+                                                yield {
+                                                    "type": "chunk",
+                                                    "content": segment,
+                                                }
 
                                 existing_messages_count = len(messages)
 
@@ -405,12 +415,18 @@ class ChatService:
                             if content is not None:
                                 content_str = serialize_content_to_string(content)
 
-                                if content_str.strip():
-                                    full_response += content_str
-                                    yield {"type": "chunk", "content": content_str}
+                                if content_str:
+                                    full_response, segments = diff_stream_segments(
+                                        full_response, content_str
+                                    )
+                                    for segment in segments:
+                                        yield {"type": "chunk", "content": segment}
 
                     final_state = await self.app.aget_state(config)
                     token_usage = final_state.values.get("tokens", {})
+                    full_response = _sync_stream_with_persisted(
+                        final_state, full_response
+                    )
                     LOGGER.info(
                         f"Resume completed, final state next nodes: {final_state.next}"
                     )
@@ -490,20 +506,15 @@ class ChatService:
                                     )
 
                                 # Calculate the new content delta
-                                if content_str and len(content_str) > len(
-                                    full_response
-                                ):
-                                    new_content = content_str[len(full_response) :]
-                                    full_response = content_str
-
-                                    if new_content:
-                                        for segment in _iter_preserving_whitespace(
-                                            new_content
-                                        ):
-                                            yield {
-                                                "type": "chunk",
-                                                "content": segment,
-                                            }
+                                if content_str:
+                                    full_response, segments = diff_stream_segments(
+                                        full_response, content_str
+                                    )
+                                    for segment in segments:
+                                        yield {
+                                            "type": "chunk",
+                                            "content": segment,
+                                        }
 
                         # Update the last sent index
                         last_sent_index = len(messages)
@@ -541,6 +552,9 @@ class ChatService:
                     }
                 else:
                     token_usage = final_state.values.get("tokens", {})
+                    full_response = _sync_stream_with_persisted(
+                        final_state, full_response
+                    )
                     yield {
                         "type": "done",
                         "content": full_response,
@@ -557,12 +571,16 @@ class ChatService:
                     if content is not None:
                         content_str = serialize_content_to_string(content)
 
-                        if content_str.strip():
-                            full_response += content_str
-                            yield {"type": "chunk", "content": content_str}
+                        if content_str:
+                            full_response, segments = diff_stream_segments(
+                                full_response, content_str
+                            )
+                            for segment in segments:
+                                yield {"type": "chunk", "content": segment}
 
                 final_state = await self.app.aget_state(config)
                 token_usage = final_state.values.get("tokens", {})
+                full_response = _sync_stream_with_persisted(final_state, full_response)
                 yield {
                     "type": "complete",
                     "content": full_response,
