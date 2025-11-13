@@ -71,6 +71,7 @@ watchfiles==1.1.0
 websockets==15.0.1
 xxhash==3.5.0
 zstandard==0.24.0
+pytest==8.3.4
 
 # common requirements
 redis-om==0.3.5
