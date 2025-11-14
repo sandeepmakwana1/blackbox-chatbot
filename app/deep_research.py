@@ -463,6 +463,7 @@ def close_deep_research(state: ConversationState) -> Dict:
     Close the deep research session with a friendly message.
     """
     research_plan = state.get("research_plan", "")
+    response: Dict = {"research_initiated": False}
 
     if not research_plan:
         content = (
@@ -470,9 +471,9 @@ def close_deep_research(state: ConversationState) -> Dict:
             "You can switch to regular chat mode or start a new deep research task."
         )
 
-        response = AIMessage(content=content)
-        return {"messages": [response]}
-    return {}
+        response_message = AIMessage(content=content)
+        response["messages"] = [response_message]
+    return response
 
 
 def rejected_node(state: ConversationState) -> Dict:
