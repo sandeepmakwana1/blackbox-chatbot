@@ -115,7 +115,7 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     base = list(state["messages"])
     language = state.get("language", "English")
     conversation_context = _build_conversation_context(state)
-    contexts = state.get("context", [])
+    contexts = state.get("contexts", [])
     has_contexts = bool(contexts)
 
     system_prompt = SystemMessagePromptTemplate.from_template(
@@ -190,7 +190,7 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     """
     # Use the research plan from the previous node
     query = state.get("research_plan", "")
-    contexts = state.get("context", [])
+    contexts = state.get("contexts", [])
     has_contexts = bool(contexts)
 
     if not query:
