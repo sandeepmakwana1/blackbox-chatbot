@@ -102,7 +102,11 @@ class PlaygroundResearchPlainPrompt:
     """
 
     user_prompt = """
-    User query : {user_query}
+    **User query :** {user_query}
+    
+    Conversation context and RFP context (use this to avoid re-asking known details):
+    {conversation_context}
+    {rfp_context}
     """
 
 
@@ -148,7 +152,13 @@ class DeepResearchPromptGenreatorPrompt:
         - If the query is in a specific language, prioritize sources published in that language.
     """
     user_prompt = """
+    **Research instructions derived from planning:**
     {query}
+
+    Prior conversation context and user preferences and RFP Context:
+    {conversation_context}
+    {rfp_context}
+
     """
 
 

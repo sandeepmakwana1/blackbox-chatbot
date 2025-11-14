@@ -7,9 +7,10 @@ Extracted from 5_deep_research_chat_bot_support.ipynb and refactored for product
 
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from openai import OpenAI
 from langgraph.types import interrupt, Command
+from app.helper import get_context_data
 
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import (
@@ -21,7 +22,12 @@ from langchain_openai import ChatOpenAI
 
 from app.schema import ConversationState
 from app.config import DEFAULT_MODELS
-from app.helper import update_token_tracking, safe_ai_invoke_async, handle_openai_error
+from app.helper import (
+    update_token_tracking,
+    safe_ai_invoke_async,
+    handle_openai_error,
+    serialize_content_to_string,
+)
 from app.prompt import PlaygroundResearchPlainPrompt, DeepResearchPromptGenreatorPrompt
 from app.store import add_record, delete_record
 
@@ -38,6 +44,67 @@ __all__ = [
 LOGGER = logging.getLogger("deep-research")
 
 
+def _message_to_text(msg: BaseMessage) -> str:
+    """Convert a message into a compact ``Role: content`` string."""
+
+    if msg is None:
+        return ""
+
+    role = "Assistant"
+    if isinstance(msg, HumanMessage):
+        role = "User"
+    elif isinstance(msg, SystemMessage):
+        role = "System"
+
+    content = (
+        serialize_content_to_string(getattr(msg, "content", msg)).strip()
+        if hasattr(msg, "content")
+        else str(msg).strip()
+    )
+    return f"{role}: {content}" if content else ""
+
+
+def _build_conversation_context(
+    state: ConversationState, max_turns: int = 8, max_chars: int = 5000
+) -> str:
+    """Assemble summary + recent turns so deep research can reuse prior context."""
+
+    context_parts: List[str] = []
+
+    summary_context = state.get("summary_context")
+    if summary_context:
+        if isinstance(summary_context, (list, tuple)):
+            summary_text = "\n".join(
+                serialize_content_to_string(getattr(msg, "content", msg)).strip()
+                for msg in summary_context
+                if msg
+            )
+        else:
+            summary_text = serialize_content_to_string(
+                getattr(summary_context, "content", summary_context)
+            ).strip()
+
+        if summary_text:
+            context_parts.append(f"Summary Context:\n{summary_text}")
+
+    messages = list(state.get("messages", []))
+    if messages:
+        recent_history = []
+        for msg in messages[-max_turns:]:
+            formatted = _message_to_text(msg)
+            if formatted:
+                recent_history.append(formatted)
+
+        if recent_history:
+            context_parts.append("Recent Conversation:\n" + "\n".join(recent_history))
+
+    context_text = "\n\n".join(context_parts).strip()
+    if context_text and len(context_text) > max_chars:
+        context_text = context_text[-max_chars:]
+
+    return context_text
+
+
 async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     """
     Initial deep research planning node that asks clarifying questions.
@@ -47,6 +114,9 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     """
     base = list(state["messages"])
     language = state.get("language", "English")
+    conversation_context = _build_conversation_context(state)
+    contexts = state.get("context", [])
+    has_contexts = bool(contexts)
 
     system_prompt = SystemMessagePromptTemplate.from_template(
         PlaygroundResearchPlainPrompt.system_prompt
@@ -62,9 +132,23 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
         streaming=False,  # Disable streaming so routing can work properly
     )
 
+    last_message = base[-1] if base else None
+    user_query = (
+        serialize_content_to_string(getattr(last_message, "content", last_message))
+        if last_message is not None
+        else ""
+    )
+
+    rfp_context = ""
+    if has_contexts:
+        source_id = (state.get("user_id") or "").split("_")[-1]
+        rfp_context = get_context_data(source_id, "rfp_text")
+
     msgs = prompt_template.format_messages(
         language=language,
-        user_query=base[-1],
+        user_query=user_query,
+        conversation_context=conversation_context or "",
+        rfp_context=rfp_context,
     )
 
     # Use safe async invoke with proper error handling
@@ -103,6 +187,8 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     """
     # Use the research plan from the previous node
     query = state.get("research_plan", "")
+    contexts = state.get("context", [])
+    has_contexts = bool(contexts)
 
     if not query:
         # Fallback to extracting from messages
@@ -135,7 +221,17 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         ]
     )
 
-    messages = prompt.format_messages(query=query)
+    conversation_context = _build_conversation_context(state)
+    rfp_context = ""
+    if has_contexts:
+        source_id = (state.get("user_id") or "").split("_")[-1]
+        rfp_context = get_context_data(source_id, "rfp_text")
+
+    messages = prompt.format_messages(
+        query=query,
+        conversation_context=conversation_context or "",
+        rfp_context=rfp_context,
+    )
 
     # Use safe async invoke with proper error handling
     response = await safe_ai_invoke_async(

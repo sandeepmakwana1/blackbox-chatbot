@@ -385,10 +385,11 @@ class ChatService:
                                             research_initiated_sent = True
 
                                         if content_str:
-                                            full_response, segments = (
-                                                merge_cumulative_or_delta(
-                                                    full_response, content_str
-                                                )
+                                            (
+                                                full_response,
+                                                segments,
+                                            ) = merge_cumulative_or_delta(
+                                                full_response, content_str
                                             )
                                             for segment in segments:
                                                 yield {
@@ -512,10 +513,8 @@ class ChatService:
 
                                 # Calculate the new content delta
                                 if content_str:
-                                    full_response, segments = (
-                                        merge_cumulative_or_delta(
-                                            full_response, content_str
-                                        )
+                                    full_response, segments = merge_cumulative_or_delta(
+                                        full_response, content_str
                                     )
                                     for segment in segments:
                                         yield {
