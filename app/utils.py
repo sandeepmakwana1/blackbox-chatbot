@@ -475,19 +475,24 @@ class ChatService:
             False  # Track if we've already sent the research_initiated notification
         )
 
+        # Track how many messages already existed so we don't replay them
+        existing_messages_count = 0
+        if existing_state and getattr(existing_state, "values", None):
+            existing_messages_count = len(
+                existing_state.values.get("messages", [])
+            )
+
         try:
             if conversation_type == "deep-research":
                 # For deep research, use values streaming to handle interrupts properly
-                # Track the index of the last message we've already sent to avoid duplicates
-                last_sent_index = 1  # Start at 1 to skip the initial user message
+                # Skip messages that were already present (plus the new human input)
+                last_sent_index = existing_messages_count + 1
 
                 async for chunk in self.app.astream(
                     initial_state, config, stream_mode="values"
                 ):
                     # Extract messages from the chunk
                     messages = chunk.get("messages", [])
-                    if last_sent_index == 1 and len(messages) > 1:
-                        last_sent_index = len(messages) - 1
                     # Only process new messages that haven't been sent yet
                     if messages and len(messages) > last_sent_index:
                         # Process only the new messages
