@@ -268,6 +268,7 @@ class ChatService:
             "language": language,
             "thread_id": thread_id,
             "tokens": existing_tokens,
+            "research_initiated": False,
         }
 
         try:
@@ -465,6 +466,7 @@ class ChatService:
             "language": language,
             "thread_id": thread_id,
             "tokens": existing_tokens,
+            "research_initiated": False,
         }
 
         yield {"type": "start", "content": "", "conversation_type": conversation_type}
