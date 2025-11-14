@@ -139,10 +139,13 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
         else ""
     )
 
+    print(has_contexts, '================> has_contexts in deepresearch_plaining_node')
     rfp_context = ""
     if has_contexts:
         source_id = (state.get("user_id") or "").split("_")[-1]
         rfp_context = get_context_data(source_id, "rfp_text")
+
+    print(rfp_context, '================> rfp_context in deepresearch_plaining_node')
 
     msgs = prompt_template.format_messages(
         language=language,
@@ -221,12 +224,15 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         ]
     )
 
+    print(has_contexts, '================> has_contexts in deepresearch_plaining_node')
+    
+
     conversation_context = _build_conversation_context(state)
     rfp_context = ""
     if has_contexts:
         source_id = (state.get("user_id") or "").split("_")[-1]
         rfp_context = get_context_data(source_id, "rfp_text")
-
+    print(rfp_context, '================> rfp_context in deepresearch_plaining_node')
     messages = prompt.format_messages(
         query=query,
         conversation_context=conversation_context or "",
