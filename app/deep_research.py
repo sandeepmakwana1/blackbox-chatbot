@@ -232,7 +232,10 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     if has_contexts:
         source_id = (state.get("user_id") or "").split("_")[-1]
         rfp_context = get_context_data(source_id, "rfp_text")
-    print(rfp_context, '================> rfp_context in deepresearch_plaining_node')
+    # print(rfp_context, '================> rfp_context in deepresearch_plaining_node')
+    print(conversation_context, '================> conversation_context in deepresearch_plaining_node')
+
+
     messages = prompt.format_messages(
         query=query,
         conversation_context=conversation_context or "",
