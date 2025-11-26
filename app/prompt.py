@@ -99,10 +99,19 @@ class PlaygroundResearchPlainPrompt:
     8. **Format for Conversational Use**
     - The output should sound helpful and conversational—not like a form. Aim for a natural tone while still being precise.
 
+    IMPORTANT GUIDELINES: 
+        **Background context:**      
+        To Understand the **User query** better Here is some context:
+        [ Prior conversation context ] 
+        {conversation_context}
+
+        [RFP context](use this to avoid re-asking known details)
+        {rfp_context}
+
     """
 
     user_prompt = """
-    User query : {user_query}
+    **User query :** {user_query}
     """
 
 
@@ -146,8 +155,18 @@ class DeepResearchPromptGenreatorPrompt:
         - For product and travel research, prefer linking directly to official or primary websites (e.g., official brand sites, manufacturer pages, or reputable e-commerce platforms like Amazon for user reviews) rather than aggregator sites or SEO-heavy blogs.
         - For academic or scientific queries, prefer linking directly to the original paper or official journal publication rather than survey papers or secondary summaries.
         - If the query is in a specific language, prioritize sources published in that language.
+
+    IMPORTANT GUIDELINES: 
+        **Background context:**      
+        To Understand the **Research instructions** better Here is some context:
+        [ Prior conversation context ] 
+        {conversation_context}
+
+        [RFP context]
+        {rfp_context}
     """
     user_prompt = """
+    **Research instructions derived from planning:**
     {query}
     """
 
