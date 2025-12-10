@@ -4,7 +4,6 @@ import time
 import uuid
 from typing import Literal, List
 
-import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from fastapi import (
     FastAPI,
@@ -55,6 +54,7 @@ from app.config import (
     TTL_SECONDS,
     UPLOAD_PREFIX,
 )
+from app.utils import create_s3_client
 
 client = OpenAI(
     webhook_secret=OPENAI_WEBHOOK_SECRET,
@@ -95,7 +95,6 @@ app.add_middleware(
 service = ChatService()
 chat_manager = ChatManager()
 websocket_manager = WebSocketConnectionManager()
-
 
 @app.websocket("/ws/{user_id}/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str):
@@ -670,14 +669,7 @@ async def upload_files(
             detail="At least one file must be provided.",
         )
 
-    bucket = os.getenv("IMAGE_UPLOAD_BUCKET")
-    if not bucket:
-        LOGGER.error("Missing IMAGE_UPLOAD_BUCKET configuration")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Server misconfiguration: S3 bucket not configured.",
-        )
-
+    bucket = os.getenv("IMAGE_UPLOAD_BUCKET", 'playground-images')
     raw_ttl = os.getenv("TTL_SECONDS", "3600")
     try:
         expires_in = int(raw_ttl) if raw_ttl else TTL_SECONDS
@@ -692,7 +684,7 @@ async def upload_files(
     expires_at = int(time.time()) + expires_in
 
     try:
-        s3 = boto3.client("s3")
+        s3 = create_s3_client()
     except (BotoCoreError, NoCredentialsError, ClientError) as exc:
         LOGGER.error(
             "Failed to initialize S3 client for global document uploads", exc_info=True

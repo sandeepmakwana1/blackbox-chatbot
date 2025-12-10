@@ -87,52 +87,6 @@ async def chat_node(state: ConversationState):
     contexts = state.get("contexts", [])
     summary = state.get("summary_context")
     metadata = state.get("metadata") or {}
-
-    # Append human-visible attachment context for any uploaded files
-    file_urls = []
-    if isinstance(metadata, dict):
-        files = metadata.get("files")
-        if isinstance(files, list):
-            for file in files:
-                url = file.get("url") if isinstance(file, dict) else None
-                if url:
-                    file_urls.append(url)
-
-    if file_urls:
-        # Attach images to the most recent human message so text and images stay together
-        last_human_idx = None
-        for idx in range(len(messages) - 1, -1, -1):
-            if isinstance(messages[idx], HumanMessage):
-                last_human_idx = idx
-                break
-
-        def _coerce_to_blocks(content):
-            if isinstance(content, list):
-                return list(content)
-            if isinstance(content, str):
-                return [{"type": "text", "text": content}]
-            return [{"type": "text", "text": str(content)}]
-
-        image_blocks = [
-            {"type": "image_url", "image_url": {"url": url}} for url in file_urls
-        ]
-
-        if last_human_idx is not None:
-            last_msg = messages[last_human_idx]
-            content_blocks = _coerce_to_blocks(getattr(last_msg, "content", ""))
-            content_blocks.extend(image_blocks)
-            messages[last_human_idx] = HumanMessage(
-                content=content_blocks,
-                additional_kwargs=getattr(last_msg, "additional_kwargs", {}),
-                response_metadata=getattr(last_msg, "response_metadata", {}),
-                id=getattr(last_msg, "id", None),
-            )
-        else:
-            # Fallback: create a new human message if none exist
-            content_blocks = [{"type": "text", "text": "Attached images for context."}]
-            content_blocks.extend(image_blocks)
-            messages.append(HumanMessage(content=content_blocks))
-
     # Use new tool and contexts parameters
     use_web = tool == "web"
     has_contexts = bool(contexts)
@@ -153,7 +107,26 @@ async def chat_node(state: ConversationState):
 
     system_prompt = SystemMessagePromptTemplate.from_template(chat_system_prompt)
     user_prompt = HumanMessagePromptTemplate.from_template(chat_user_prompt)
-    prompt_template = ChatPromptTemplate.from_messages([system_prompt, messages[-1]])
+    prompt_template = ChatPromptTemplate.from_messages([system_prompt, user_prompt])
+
+    if metadata:
+        # Append human-visible attachment context for any uploaded files
+        file_urls = []
+        if isinstance(metadata, dict):
+            files = metadata.get("files")
+            if isinstance(files, list):
+                for file in files:
+                    url = file.get("url") if isinstance(file, dict) else None
+                    if url:
+                        file_urls.append(url)
+
+        if file_urls:    
+            image_blocks = [
+                {"type": "image_url", "image_url": {"url": url}} for url in file_urls
+            ]
+            content_blocks = [{"type": "text", "text": "Attached images for context."}]
+            content_blocks.extend(image_blocks)
+            prompt_template = ChatPromptTemplate.from_messages([system_prompt, user_prompt, HumanMessage(content=content_blocks)])
 
     model_chat = ChatOpenAI(
         model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True

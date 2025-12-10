@@ -7,6 +7,10 @@ __all__ = [
     "LOGGER",
 ]
 
+import asyncio
+import boto3
+from botocore.config import Config
+
 import os
 import logging
 import asyncio
@@ -607,3 +611,46 @@ class ChatService:
         except Exception as e:
             LOGGER.exception("Streaming error")
             yield {"type": "error", "message": str(e)}
+
+
+
+def _strip_quotes(value: Optional[str]) -> Optional[str]:
+    """Normalize env var values that may be wrapped in quotes."""
+    if not value:
+        return value
+
+    cleaned = value.strip()
+    if cleaned.startswith(("'", '"')) and cleaned.endswith(("'", '"')):
+        return cleaned[1:-1]
+    return cleaned
+
+
+def create_s3_client() -> boto3.client:
+    """Create an S3 client that works with our .env variable names.
+
+    The .env currently uses `AWS_ACCESS_KEY`/`AWS_SECRET_KEY` instead of the
+    standard AWS variable names. We normalize those so presigned URLs can be
+    generated from any environment (local, server, or container).
+    """
+
+    access_key = _strip_quotes(
+        os.getenv("AWS_ACCESS_KEY_ID") or os.getenv("AWS_ACCESS_KEY")
+    )
+    secret_key = _strip_quotes(
+        os.getenv("AWS_SECRET_ACCESS_KEY") or os.getenv("AWS_SECRET_KEY")
+    )
+    session_token = _strip_quotes(os.getenv("AWS_SESSION_TOKEN"))
+    region = _strip_quotes(os.getenv("AWS_REGION"))
+
+    session_kwargs = {}
+    if region:
+        session_kwargs["region_name"] = region
+    if access_key and secret_key:
+        session_kwargs["aws_access_key_id"] = access_key
+        session_kwargs["aws_secret_access_key"] = secret_key
+        if session_token:
+            session_kwargs["aws_session_token"] = session_token
+
+    session = boto3.session.Session(**session_kwargs)
+    return session.client("s3", config=Config(signature_version="s3v4"))
+
