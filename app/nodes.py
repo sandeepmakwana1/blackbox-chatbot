@@ -120,13 +120,15 @@ async def chat_node(state: ConversationState):
                     if url:
                         file_urls.append(url)
 
-        if file_urls:    
+        if file_urls:
             image_blocks = [
                 {"type": "image_url", "image_url": {"url": url}} for url in file_urls
             ]
             content_blocks = [{"type": "text", "text": "Attached images for context."}]
             content_blocks.extend(image_blocks)
-            prompt_template = ChatPromptTemplate.from_messages([system_prompt, user_prompt, HumanMessage(content=content_blocks)])
+            prompt_template = ChatPromptTemplate.from_messages(
+                [system_prompt, user_prompt, HumanMessage(content=content_blocks)]
+            )
 
     model_chat = ChatOpenAI(
         model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True

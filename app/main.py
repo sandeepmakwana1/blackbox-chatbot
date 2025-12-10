@@ -96,6 +96,7 @@ service = ChatService()
 chat_manager = ChatManager()
 websocket_manager = WebSocketConnectionManager()
 
+
 @app.websocket("/ws/{user_id}/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str):
     """Enhanced WebSocket endpoint with immediate thread binding."""
@@ -304,6 +305,33 @@ async def update_conversation_state_from_webhook(
         LOGGER.error(f"Failed to update conversation state for thread {thread_id}: {e}")
 
 
+def _extract_response_text(response, rid=None):
+    i = 0
+    while i < 2:
+        i += 1
+        try:
+            """
+            Extract concatenated text from any 'message' entries in response['output'].
+            This matches the JSON structure you pasted earlier.
+            """
+            texts = []
+            response = response.model_dump()
+            for item in response.get("output", []):
+                if item.get("type") == "message":
+                    for part in item.get("content", []):
+                        if part.get("type") == "output_text":
+                            text = part.get("text")
+                            if text:
+                                texts.append(text)
+            if texts:
+                return "".join(texts)
+        except Exception as e:
+            print(f"Attempt {i} to extract response text for {rid} failed: {e}")
+        if rid:
+            response = client.responses.retrieve(rid)
+    return ""
+
+
 @app.post("/webhook")
 async def webhook(request: Request, bg: BackgroundTasks):
     """
@@ -332,6 +360,13 @@ async def webhook(request: Request, bg: BackgroundTasks):
             thread_id = metadata.get("thread_id")
             user_id = metadata.get("user_id")
 
+            if not answer:
+                answer = _extract_response_text(response, rid)
+                if not answer:
+                    answer = (
+                        "Deep Research could not be completed due to an issue with the "
+                        "OpenAI(Chat GPT) API service."
+                    )
             # Validate required fields
             if not thread_id:
                 LOGGER.warning(
@@ -646,6 +681,7 @@ async def health_check():
             "error": str(e),
         }
 
+
 # Upload endpoint
 @app.post(
     "/api/upload",
@@ -669,7 +705,7 @@ async def upload_files(
             detail="At least one file must be provided.",
         )
 
-    bucket = os.getenv("IMAGE_UPLOAD_BUCKET", 'playground-images')
+    bucket = os.getenv("IMAGE_UPLOAD_BUCKET", "playground-images")
     raw_ttl = os.getenv("TTL_SECONDS", "3600")
     try:
         expires_in = int(raw_ttl) if raw_ttl else TTL_SECONDS

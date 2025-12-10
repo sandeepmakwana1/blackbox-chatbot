@@ -613,7 +613,6 @@ class ChatService:
             yield {"type": "error", "message": str(e)}
 
 
-
 def _strip_quotes(value: Optional[str]) -> Optional[str]:
     """Normalize env var values that may be wrapped in quotes."""
     if not value:
@@ -653,4 +652,3 @@ def create_s3_client() -> boto3.client:
 
     session = boto3.session.Session(**session_kwargs)
     return session.client("s3", config=Config(signature_version="s3v4"))
-
