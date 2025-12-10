@@ -480,9 +480,7 @@ class ChatService:
         # Track how many messages already existed so we don't replay them
         existing_messages_count = 0
         if existing_state and getattr(existing_state, "values", None):
-            existing_messages_count = len(
-                existing_state.values.get("messages", [])
-            )
+            existing_messages_count = len(existing_state.values.get("messages", []))
 
         try:
             if conversation_type == "deep-research":

@@ -15,9 +15,7 @@ DEFAULT_MODELS = {
     "research_plain": os.getenv("MODEL_RESEARCH_PLAIN", "gpt-4.1-2025-04-14"),
 }
 # Token tracking only - no pricing needed
-OPENAI_RESPONSE_MODEL = os.getenv(
-    "OPENAI_RESPONSE_MODEL", "gpt-4o-mini-2024-07-18"
-)
+OPENAI_RESPONSE_MODEL = os.getenv("OPENAI_RESPONSE_MODEL", "gpt-4o-mini-2024-07-18")
 # o4-mini-deep-research-2025-06-26
 OPTIMIZER_MODEL = os.getenv("OPTIMIZER_MODEL", "gpt-4o-mini")
 
