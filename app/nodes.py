@@ -153,7 +153,7 @@ async def chat_node(state: ConversationState):
 
     system_prompt = SystemMessagePromptTemplate.from_template(chat_system_prompt)
     user_prompt = HumanMessagePromptTemplate.from_template(chat_user_prompt)
-    prompt_template = ChatPromptTemplate.from_messages([system_prompt,user_prompt, messages[-1]])
+    prompt_template = ChatPromptTemplate.from_messages([system_prompt, messages[-1]])
 
     model_chat = ChatOpenAI(
         model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True
