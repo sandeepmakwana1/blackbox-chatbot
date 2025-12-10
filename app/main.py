@@ -781,7 +781,7 @@ async def upload_files(
                 )
             except (BotoCoreError, NoCredentialsError, ClientError) as exc:
                 LOGGER.error(
-                    "Failed to upload global document file",
+                    "Failed to upload image file",
                     exc_info=True,
                     extra={"key": object_key, "bucket": bucket},
                 )
