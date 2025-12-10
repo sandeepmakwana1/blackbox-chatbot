@@ -226,6 +226,7 @@ class ChatService:
         conversation_type: str = "chat",
         tool: str = "",
         contexts: List[str] = [],
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Process a single message in a conversation thread.
@@ -269,6 +270,7 @@ class ChatService:
             "thread_id": thread_id,
             "tokens": existing_tokens,
             "research_initiated": False,
+            "metadata": metadata,
         }
 
         try:
@@ -292,6 +294,7 @@ class ChatService:
         conversation_type: str = "chat",
         tool: str = "",
         contexts: List[str] = [],
+        metadata: Optional[Dict[str, Any]] = None,
     ):
         """
         Process a message with streaming responses using LangGraph's astream.
@@ -467,6 +470,7 @@ class ChatService:
             "thread_id": thread_id,
             "tokens": existing_tokens,
             "research_initiated": False,
+            "metadata": metadata,
         }
 
         yield {"type": "start", "content": "", "conversation_type": conversation_type}

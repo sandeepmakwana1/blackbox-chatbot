@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing_extensions import TypedDict
-from typing import Annotated, Dict, List, Optional, Sequence
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 from langchain_core.messages import (
     BaseMessage,
 )
@@ -29,6 +29,7 @@ class ConversationState(TypedDict):
         Optional[bool]
     ]  # Flag to indicate research has been initiated
     tokens: Optional[Dict]
+    metadata: NotRequired[Optional[Dict[str, Any]]]
 
 
 class PromptOptimizerInput(BaseModel):

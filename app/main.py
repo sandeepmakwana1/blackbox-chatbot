@@ -127,6 +127,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
             language = payload.get("language", "English")
             tool = payload.get("tool", "")
             contexts = payload.get("contexts", [])
+            metadata = payload.get("metadata", {})
 
             # Allow thread switching if client provides different thread_id
             if requested_thread_id and requested_thread_id != current_thread_id:
@@ -162,6 +163,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, thread_id: str)
                 conversation_type=conversation_type,
                 tool=tool,
                 contexts=contexts,
+                metadata=metadata,
             ):
                 await websocket.send_text(json.dumps(chunk))
 
