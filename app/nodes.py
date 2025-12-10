@@ -180,7 +180,6 @@ async def chat_node(state: ConversationState):
         rfp_context = get_context_data(source_id, "rfp_text")
         prompt_args["rfp_context"] = rfp_context or ""
     msgs = prompt_template.format_messages(**prompt_args)
-    print(msgs)
 
     response: AIMessage = await model_chat.ainvoke(msgs)
 
