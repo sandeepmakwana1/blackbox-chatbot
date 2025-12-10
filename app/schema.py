@@ -43,3 +43,19 @@ class ChatCreateRequest(BaseModel):
 
 class ChatRenameRequest(BaseModel):
     title: str
+
+
+class UploadItem(BaseModel):
+    """Metadata returned for a single uploaded file."""
+
+    original_filename: str
+    file_size: int
+    # s3_key: str
+    url: str
+    expires_at: int
+
+
+class UploadResponse(BaseModel):
+    """Response payload for uploaded files."""
+
+    files: List[UploadItem]

@@ -43,3 +43,15 @@ if not OPENAI_WEBHOOK_SECRET:
     raise RuntimeError(
         "OPENAI_WEBHOOK_SECRET is not set. Export it before starting the app."
     )
+
+
+# Only allow image uploads for pre-signed URL generation
+ALLOWED_UPLOAD_MIME_TYPES = {
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/svg+xml",
+}
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+TTL_SECONDS = 3600
+UPLOAD_PREFIX = "playground-images/uploads"

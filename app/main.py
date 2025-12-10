@@ -1,4 +1,23 @@
-from fastapi import FastAPI, WebSocket, HTTPException
+import mimetypes
+import os
+import time
+import uuid
+from typing import Literal, List
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    HTTPException,
+    Request,
+    BackgroundTasks,
+    Depends,
+    File,
+    UploadFile,
+    status,
+    Form,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 from contextlib import asynccontextmanager
@@ -21,10 +40,21 @@ from app.store import get_record
 from pydantic import BaseModel
 from typing import Optional
 from openai import OpenAI, InvalidWebhookSignatureError
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from app.config import OPENAI_WEBHOOK_SECRET
-from app.schema import PromptOptimizerInput, ChatCreateRequest, ChatRenameRequest
 
+# Consolidated FastAPI imports above
+from app.config import OPENAI_WEBHOOK_SECRET
+from app.schema import (
+    PromptOptimizerInput,
+    ChatCreateRequest,
+    ChatRenameRequest,
+    UploadResponse,
+)
+from app.config import (
+    ALLOWED_UPLOAD_MIME_TYPES,
+    MAX_UPLOAD_SIZE_BYTES,
+    TTL_SECONDS,
+    UPLOAD_PREFIX,
+)
 
 client = OpenAI(
     webhook_secret=OPENAI_WEBHOOK_SECRET,
@@ -614,6 +644,158 @@ async def health_check():
             "timestamp": datetime.utcnow().isoformat(),
             "error": str(e),
         }
+
+# Upload endpoint
+@app.post(
+    "/api/upload",
+    response_model=UploadResponse,
+    description="Upload one or more files and receive presigned URLs to access them.",
+)
+async def upload_files(
+    files: List[UploadFile] = File(...),
+    user_id: str = Form(...),
+    thread_id: str = Form(...),
+):
+    """
+    Upload images to S3 and return pre-signed URLs for later retrieval.
+
+    Validates file types and sizes, handles S3 connectivity errors, and returns
+    per-file metadata including the object key, size, URL, and expiry.
+    """
+    if not files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one file must be provided.",
+        )
+
+    bucket = os.getenv("IMAGE_UPLOAD_BUCKET")
+    if not bucket:
+        LOGGER.error("Missing IMAGE_UPLOAD_BUCKET configuration")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server misconfiguration: S3 bucket not configured.",
+        )
+
+    raw_ttl = os.getenv("TTL_SECONDS", "3600")
+    try:
+        expires_in = int(raw_ttl) if raw_ttl else TTL_SECONDS
+    except (TypeError, ValueError):
+        LOGGER.warning(
+            "Invalid TTL_SECONDS value '%s'; using default %s",
+            raw_ttl,
+            TTL_SECONDS,
+        )
+        expires_in = TTL_SECONDS
+
+    expires_at = int(time.time()) + expires_in
+
+    try:
+        s3 = boto3.client("s3")
+    except (BotoCoreError, NoCredentialsError, ClientError) as exc:
+        LOGGER.error(
+            "Failed to initialize S3 client for global document uploads", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to connect to storage service.",
+        ) from exc
+
+    responses = []
+
+    for file in files:
+        try:
+            filename = os.path.basename(file.filename or "").strip()
+            if not filename:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded file must include a filename.",
+                )
+
+            guessed, _ = mimetypes.guess_type(file.filename or "")
+            mime_type = (
+                file.content_type or guessed or "application/octet-stream"
+            ).lower()
+            if mime_type not in ALLOWED_UPLOAD_MIME_TYPES:
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail=(
+                        f"Unsupported file type '{mime_type}'. "
+                        f"Allowed types: {sorted(ALLOWED_UPLOAD_MIME_TYPES)}"
+                    ),
+                )
+
+            content = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+            size = len(content)
+            if size == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File '{filename}' is empty.",
+                )
+            if size > MAX_UPLOAD_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=(
+                        f"File '{filename}' exceeds the maximum allowed size of "
+                        f"{MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)}MB."
+                    ),
+                )
+
+            object_key = f"{UPLOAD_PREFIX}/{str(user_id)}/{str(thread_id)}/{uuid.uuid4()}-{filename}"
+
+            try:
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=object_key,
+                    Body=content,
+                    ContentType=mime_type,
+                )
+            except (BotoCoreError, NoCredentialsError, ClientError) as exc:
+                LOGGER.error(
+                    "Failed to upload global document file",
+                    exc_info=True,
+                    extra={"key": object_key, "bucket": bucket},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Unable to connect to storage service.",
+                ) from exc
+
+            try:
+                url = s3.generate_presigned_url(
+                    "get_object",
+                    Params={"Bucket": bucket, "Key": object_key},
+                    ExpiresIn=expires_in,
+                )
+            except (BotoCoreError, NoCredentialsError, ClientError) as exc:
+                LOGGER.error(
+                    "Failed to generate presigned URL for global document file",
+                    exc_info=True,
+                    extra={"key": object_key, "bucket": bucket},
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Unable to generate pre-signed URL.",
+                ) from exc
+
+            if not url:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to generate pre-signed URL.",
+                )
+
+            responses.append(
+                {
+                    "original_filename": filename,
+                    "file_size": size,
+                    # "s3_key": object_key,
+                    "url": url,
+                    "expires_at": expires_at,
+                }
+            )
+        finally:
+            await file.close()
+
+    return {"files": responses}
 
 
 # Local run: uvicorn app:app --reload
