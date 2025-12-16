@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing_extensions import TypedDict
-from typing import Annotated, Dict, List, Optional, Sequence
+from typing import Annotated, Any, Dict, List, Optional, Sequence
 from langchain_core.messages import (
     BaseMessage,
 )
@@ -29,6 +29,7 @@ class ConversationState(TypedDict):
         Optional[bool]
     ]  # Flag to indicate research has been initiated
     tokens: Optional[Dict]
+    metadata: NotRequired[Optional[Dict[str, Any]]]
 
 
 class PromptOptimizerInput(BaseModel):
@@ -43,3 +44,19 @@ class ChatCreateRequest(BaseModel):
 
 class ChatRenameRequest(BaseModel):
     title: str
+
+
+class UploadItem(BaseModel):
+    """Metadata returned for a single uploaded file."""
+
+    original_filename: str
+    file_size: int
+    # s3_key: str
+    url: str
+    expires_at: int
+
+
+class UploadResponse(BaseModel):
+    """Response payload for uploaded files."""
+
+    files: List[UploadItem]
