@@ -82,19 +82,24 @@ def update_token_tracking(
 
     # Extract usage metadata with fallback
     usage = getattr(response, "usage_metadata", None)
-    # Prefer callback measurements when available
+    # Prefer callback measurements when available; fall back if zeros
     if cb is not None:
-        usage = {
-            "input_tokens": getattr(cb, "prompt_tokens", 0),
-            "output_tokens": getattr(cb, "completion_tokens", 0),
-            "cached_tokens": getattr(cb, "prompt_tokens_details", {}).get(
-                "cached_tokens", 0
-            ),
-            "reasoning_tokens": getattr(cb, "completion_tokens_details", {}).get(
-                "reasoning_tokens", 0
-            ),
-            "total_tokens": getattr(cb, "total_tokens", None),
-        }
+        cb_input = getattr(cb, "prompt_tokens", 0) or 0
+        cb_output = getattr(cb, "completion_tokens", 0) or 0
+        cb_cached = getattr(cb, "prompt_tokens_details", {}).get("cached_tokens", 0)
+        cb_reasoning = getattr(cb, "completion_tokens_details", {}).get(
+            "reasoning_tokens", 0
+        )
+        cb_total = getattr(cb, "total_tokens", None)
+        # Only override when callback captured anything meaningful
+        if cb_input or cb_output or cb_total:
+            usage = {
+                "input_tokens": cb_input,
+                "output_tokens": cb_output,
+                "cached_tokens": cb_cached,
+                "reasoning_tokens": cb_reasoning,
+                "total_tokens": cb_total,
+            }
     if usage:
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)

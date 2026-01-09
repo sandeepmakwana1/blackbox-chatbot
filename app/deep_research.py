@@ -19,7 +19,7 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
 )
 from langchain_openai import ChatOpenAI
-from langchain_openai.callbacks import get_openai_callback
+from langchain_community.callbacks import get_openai_callback
 
 from app.schema import ConversationState
 from app.config import DEFAULT_MODELS
@@ -159,7 +159,21 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     # Use safe async invoke with proper error handling
     with get_openai_callback() as cb:
         response = await safe_ai_invoke_async(
-            model_chat.ainvoke, msgs, context="Deep research planning"
+            model_chat.ainvoke,
+            msgs,
+            context="Deep research planning",
+            callbacks=[cb],
+        )
+        source_id = (state.get("user_id") or "").split("_")[-1]
+        token_info = update_token_tracking(
+            state=state,
+            response=response,
+            model_name=DEFAULT_MODELS["research_plain"],
+            additional_tokens=0,
+            stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PLAN,
+            source_id=source_id,
+            request_id=state.get("thread_id") or state.get("user_id"),
+            cb=cb,
         )
 
     # If response is an error message, return it
@@ -168,18 +182,6 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
         and "unable to process" in response.content.lower()
     ):
         return {"messages": [response], "tokens": state.get("tokens", {})}
-
-    source_id = (state.get("user_id") or "").split("_")[-1]
-    token_info = update_token_tracking(
-        state=state,
-        response=response,
-        model_name=DEFAULT_MODELS["research_plain"],
-        additional_tokens=0,
-        stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PLAN,
-        source_id=source_id,
-        request_id=state.get("thread_id") or state.get("user_id"),
-        cb=cb,
-    )
 
     return {
         "messages": [response],
@@ -246,7 +248,20 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     # Use safe async invoke with proper error handling
     with get_openai_callback() as cb:
         response = await safe_ai_invoke_async(
-            llm.ainvoke, messages, context="Research plan generation"
+            llm.ainvoke,
+            messages,
+            context="Research plan generation",
+            callbacks=[cb],
+        )
+        token_info = update_token_tracking(
+            state=state,
+            response=response,
+            model_name=DEFAULT_MODELS["research_plain"],
+            additional_tokens=0,
+            stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PROMPT,
+            source_id=source_id,
+            request_id=state.get("thread_id") or state.get("user_id"),
+            cb=cb,
         )
 
     # If response is an error message, handle appropriately
@@ -260,16 +275,6 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         }
 
     LOGGER.info(f"Generated enhanced research plan for query: {query[:100]}...")
-    token_info = update_token_tracking(
-        state=state,
-        response=response,
-        model_name=DEFAULT_MODELS["research_plain"],
-        additional_tokens=0,
-        stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PROMPT,
-        source_id=source_id,
-        request_id=state.get("thread_id") or state.get("user_id"),
-        cb=cb,
-    )
     return {
         "research_plan": response.content,
         "tokens": token_info,
