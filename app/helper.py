@@ -97,8 +97,11 @@ def update_token_tracking(
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
         total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
+        input_token_details = usage.get("input_token_details", {})
+        output_token_details = usage.get("output_token_details", {})
     else:
         input_tokens = output_tokens = total_tokens = 0
+        input_token_details = output_token_details = {}
 
     main_tokens = total_tokens
     total_request_tokens = main_tokens + additional_tokens
