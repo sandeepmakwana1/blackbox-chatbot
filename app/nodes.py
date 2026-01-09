@@ -200,17 +200,15 @@ async def chat_node(state: ConversationState):
             ).strip()
             break
 
-    with get_openai_callback() as cb:
-        response: AIMessage = await model_chat.ainvoke(msgs)
-        token_info = update_token_tracking(
-            state=state,
-            response=response,
-            model_name=DEFAULT_MODELS["chat"],
-            additional_tokens=0,
-            stage_name=ContextType.PLAYGROUND_CHAT,
-            source_id=source_id,
-            request_id=state.get("thread_id") or state.get("user_id"),
-            message_text=last_human,
-            cb=cb,
-        )
+    response: AIMessage = await model_chat.ainvoke(msgs)
+    token_info = update_token_tracking(
+        state=state,
+        response=response,
+        model_name=DEFAULT_MODELS["chat"],
+        additional_tokens=0,
+        stage_name=ContextType.PLAYGROUND_CHAT,
+        source_id=source_id,
+        request_id=state.get("thread_id") or state.get("user_id"),
+        message_text=last_human,
+    )
     return {"messages": [response], "summary_context": summary, "tokens": token_info}

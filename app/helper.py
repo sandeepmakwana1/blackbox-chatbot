@@ -71,7 +71,6 @@ def update_token_tracking(
     source_id: Optional[str] = None,
     request_id: Optional[str] = None,
     message_text: Optional[str] = None,
-    cb: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Track token usage across the conversation with consistent error handling."""
     prior = state.get("tokens")
@@ -82,18 +81,12 @@ def update_token_tracking(
 
     # Extract usage metadata with fallback
     usage = getattr(response, "usage_metadata", None)
-    # Prefer callback measurements when available
-    if cb is not None:
-        input_tokens = getattr(cb, "prompt_tokens", 0) or 0
-        output_tokens = getattr(cb, "completion_tokens", 0) or 0
-        total_tokens = getattr(cb, "total_tokens", None)
-        if not total_tokens:
-            total_tokens = input_tokens + output_tokens
-        usage = {
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-        }
+
+    if usage:
+        LOGGER.info(f"Using response metadata token usage: {usage}")
+    else:
+        LOGGER.warning("No token usage found in response metadata")
+
     if usage:
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
