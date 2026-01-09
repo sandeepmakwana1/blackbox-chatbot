@@ -18,7 +18,7 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
 )
-from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
 
 from app.schema import ConversationState

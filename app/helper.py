@@ -82,45 +82,24 @@ def update_token_tracking(
 
     # Extract usage metadata with fallback
     usage = getattr(response, "usage_metadata", None)
-    # Prefer callback measurements when available; fall back if zeros
+    # Prefer callback measurements when available
     if cb is not None:
-        cb_input = getattr(cb, "prompt_tokens", 0) or 0
-        cb_output = getattr(cb, "completion_tokens", 0) or 0
-        cb_cached = getattr(cb, "prompt_tokens_details", {}).get("cached_tokens", 0)
-        cb_reasoning = getattr(cb, "completion_tokens_details", {}).get(
-            "reasoning_tokens", 0
-        )
-        cb_total = getattr(cb, "total_tokens", None)
-        # Only override when callback captured anything meaningful
-        if cb_input or cb_output or cb_total:
-            usage = {
-                "input_tokens": cb_input,
-                "output_tokens": cb_output,
-                "cached_tokens": cb_cached,
-                "reasoning_tokens": cb_reasoning,
-                "total_tokens": cb_total,
-            }
+        input_tokens = getattr(cb, "prompt_tokens", 0) or 0
+        output_tokens = getattr(cb, "completion_tokens", 0) or 0
+        total_tokens = getattr(cb, "total_tokens", None)
+        if not total_tokens:
+            total_tokens = input_tokens + output_tokens
+        usage = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+        }
     if usage:
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
         total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
     else:
-        # Best-effort fallback using content length estimation
-        try:
-            content = (
-                serialize_content_to_string(response.content)
-                if hasattr(response, "content")
-                else ""
-            )
-            output_tokens = max(1, len(content) // 4)  # Rough estimation
-            input_est = 0
-            if message_text:
-                input_est = max(1, len(str(message_text)) // 4)
-            input_tokens = input_est
-            total_tokens = input_tokens + output_tokens
-        except Exception as e:
-            LOGGER.warning(f"Error estimating tokens from content: {e}")
-            input_tokens = output_tokens = total_tokens = 1  # Minimal fallback
+        input_tokens = output_tokens = total_tokens = 0
 
     main_tokens = total_tokens
     total_request_tokens = main_tokens + additional_tokens
