@@ -19,6 +19,7 @@ from langchain_core.prompts import (
     HumanMessagePromptTemplate,
 )
 from langchain_openai import ChatOpenAI
+from langchain_community.callbacks import get_openai_callback
 
 from app.schema import ConversationState
 from app.config import DEFAULT_MODELS
@@ -156,9 +157,10 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     )
 
     # Use safe async invoke with proper error handling
-    response = await safe_ai_invoke_async(
-        model_chat.ainvoke, msgs, context="Deep research planning"
-    )
+    with get_openai_callback() as cb:
+        response = await safe_ai_invoke_async(
+            model_chat.ainvoke, msgs, context="Deep research planning"
+        )
 
     # If response is an error message, return it
     if (
@@ -176,6 +178,7 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
         stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PLAN,
         source_id=source_id,
         request_id=state.get("thread_id") or state.get("user_id"),
+        cb=cb,
     )
 
     return {
@@ -241,9 +244,10 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
     )
 
     # Use safe async invoke with proper error handling
-    response = await safe_ai_invoke_async(
-        llm.ainvoke, messages, context="Research plan generation"
-    )
+    with get_openai_callback() as cb:
+        response = await safe_ai_invoke_async(
+            llm.ainvoke, messages, context="Research plan generation"
+        )
 
     # If response is an error message, handle appropriately
     if (
@@ -264,6 +268,7 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PROMPT,
         source_id=source_id,
         request_id=state.get("thread_id") or state.get("user_id"),
+        cb=cb,
     )
     return {
         "research_plan": response.content,

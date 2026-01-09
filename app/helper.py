@@ -71,6 +71,7 @@ def update_token_tracking(
     source_id: Optional[str] = None,
     request_id: Optional[str] = None,
     message_text: Optional[str] = None,
+    cb: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Track token usage across the conversation with consistent error handling."""
     prior = state.get("tokens")
@@ -81,6 +82,19 @@ def update_token_tracking(
 
     # Extract usage metadata with fallback
     usage = getattr(response, "usage_metadata", None)
+    # Prefer callback measurements when available
+    if cb is not None:
+        usage = {
+            "input_tokens": getattr(cb, "prompt_tokens", 0),
+            "output_tokens": getattr(cb, "completion_tokens", 0),
+            "cached_tokens": getattr(cb, "prompt_tokens_details", {}).get(
+                "cached_tokens", 0
+            ),
+            "reasoning_tokens": getattr(cb, "completion_tokens_details", {}).get(
+                "reasoning_tokens", 0
+            ),
+            "total_tokens": getattr(cb, "total_tokens", None),
+        }
     if usage:
         input_tokens = usage.get("input_tokens", 0)
         output_tokens = usage.get("output_tokens", 0)
@@ -93,10 +107,11 @@ def update_token_tracking(
                 if hasattr(response, "content")
                 else ""
             )
-            input_tokens = 0  # We don't have input token info in fallback
-            output_tokens = max(
-                1, len(content) // 4
-            )  # Rough estimation: 4 chars per token
+            output_tokens = max(1, len(content) // 4)  # Rough estimation
+            input_est = 0
+            if message_text:
+                input_est = max(1, len(str(message_text)) // 4)
+            input_tokens = input_est
             total_tokens = input_tokens + output_tokens
         except Exception as e:
             LOGGER.warning(f"Error estimating tokens from content: {e}")

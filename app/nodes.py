@@ -9,6 +9,7 @@ from langchain_core.prompts import (
     SystemMessagePromptTemplate,
 )
 from langchain_openai import ChatOpenAI
+from langchain_community.callbacks import get_openai_callback
 
 from app.config import (
     DEFAULT_MODELS,
@@ -187,7 +188,8 @@ async def chat_node(state: ConversationState):
         prompt_args["rfp_context"] = rfp_context or ""
     msgs = prompt_template.format_messages(**prompt_args)
 
-    response: AIMessage = await model_chat.ainvoke(msgs)
+    with get_openai_callback() as cb:
+        response: AIMessage = await model_chat.ainvoke(msgs)
 
     # Capture latest user message content for usage logging
     last_human = ""
@@ -207,5 +209,6 @@ async def chat_node(state: ConversationState):
         source_id=source_id,
         request_id=state.get("thread_id") or state.get("user_id"),
         message_text=last_human,
+        cb=cb,
     )
     return {"messages": [response], "summary_context": summary, "tokens": token_info}
