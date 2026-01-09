@@ -85,8 +85,18 @@ def update_token_tracking(
     # Fallback to response_metadata if usage_metadata is missing
     if not usage and hasattr(response, "response_metadata"):
         usage = response.response_metadata.get("token_usage")
+        if not usage:
+            usage = response.response_metadata.get("usage")
         if usage:
             LOGGER.info(f"Found token usage in response_metadata: {usage}")
+
+    # Fallback to additional_kwargs if still missing
+    if not usage and hasattr(response, "additional_kwargs"):
+        usage = response.additional_kwargs.get("usage")
+        if not usage:
+            usage = response.additional_kwargs.get("token_usage")
+        if usage:
+            LOGGER.info(f"Found token usage in additional_kwargs: {usage}")
 
     if usage:
         LOGGER.info(f"Using response metadata token usage: {usage}")
@@ -94,11 +104,38 @@ def update_token_tracking(
         LOGGER.warning("No token usage found in response metadata")
 
     if usage:
-        input_tokens = usage.get("input_tokens", 0)
-        output_tokens = usage.get("output_tokens", 0)
-        total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
-        input_token_details = usage.get("input_token_details", {})
-        output_token_details = usage.get("output_token_details", {})
+        if isinstance(usage, dict):
+            input_tokens = usage.get("input_tokens", 0)
+            if input_tokens == 0:
+                input_tokens = usage.get("prompt_tokens", 0)
+
+            output_tokens = usage.get("output_tokens", 0)
+            if output_tokens == 0:
+                output_tokens = usage.get("completion_tokens", 0)
+
+            total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
+            input_token_details = usage.get("input_token_details", {})
+            if not input_token_details:
+                input_token_details = usage.get("prompt_tokens_details", {})
+
+            output_token_details = usage.get("output_token_details", {})
+            if not output_token_details:
+                output_token_details = usage.get("completion_tokens_details", {})
+        else:
+            # Handle object access (e.g. Pydantic model or simple object)
+            input_tokens = getattr(usage, "input_tokens", 0) or getattr(
+                usage, "prompt_tokens", 0
+            )
+            output_tokens = getattr(usage, "output_tokens", 0) or getattr(
+                usage, "completion_tokens", 0
+            )
+            total_tokens = getattr(usage, "total_tokens", input_tokens + output_tokens)
+            input_token_details = getattr(usage, "input_token_details", {}) or getattr(
+                usage, "prompt_tokens_details", {}
+            )
+            output_token_details = getattr(
+                usage, "output_token_details", {}
+            ) or getattr(usage, "completion_tokens_details", {})
     else:
         input_tokens = output_tokens = total_tokens = 0
         input_token_details = output_token_details = {}
