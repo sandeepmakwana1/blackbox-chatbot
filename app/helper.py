@@ -82,6 +82,12 @@ def update_token_tracking(
     # Extract usage metadata with fallback
     usage = getattr(response, "usage_metadata", None)
 
+    # Fallback to response_metadata if usage_metadata is missing
+    if not usage and hasattr(response, "response_metadata"):
+        usage = response.response_metadata.get("token_usage")
+        if usage:
+            LOGGER.info(f"Found token usage in response_metadata: {usage}")
+
     if usage:
         LOGGER.info(f"Using response metadata token usage: {usage}")
     else:
@@ -129,15 +135,25 @@ def update_token_tracking(
     if source_id:
 
         class _UsageAdapter:
-            def __init__(self, prompt_tokens: int, completion_tokens: int):
+            def __init__(
+                self,
+                prompt_tokens: int,
+                completion_tokens: int,
+                prompt_details: dict,
+                completion_details: dict,
+            ):
                 self.prompt_tokens = prompt_tokens
                 self.completion_tokens = completion_tokens
-                self.prompt_tokens_details = {"cached_tokens": 0}
-                self.completion_tokens_details = {"reasoning_tokens": 0}
+                self.prompt_tokens_details = prompt_details or {"cached_tokens": 0}
+                self.completion_tokens_details = completion_details or {
+                    "reasoning_tokens": 0
+                }
                 self.message = message_text
 
         try:
-            adapter = _UsageAdapter(input_tokens, output_tokens)
+            adapter = _UsageAdapter(
+                input_tokens, output_tokens, input_token_details, output_token_details
+            )
             unique_request = (
                 request_id
                 or state.get("thread_id")
