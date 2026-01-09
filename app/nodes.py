@@ -40,7 +40,7 @@ def route_summarize(state: ConversationState) -> str:
     msgs = state.get("messages", [])
     tokens = state.get("tokens")
     current_token = tokens.get("current_tokens", 0) if tokens else 0
-    if len(msgs) >= SUMMARY_TRIGGER_COUNT and current_token >= MAX_TOKENS_FOR_SUMMARY:
+    if len(msgs) >= SUMMARY_TRIGGER_COUNT or current_token >= MAX_TOKENS_FOR_SUMMARY:
         return "summarize"
     return "chat"
 
@@ -136,7 +136,10 @@ async def chat_node(state: ConversationState):
             )
 
     model_chat = ChatOpenAI(
-        model=DEFAULT_MODELS["chat"], temperature=0.7, streaming=True
+        model=DEFAULT_MODELS["chat"],
+        temperature=0.7,
+        streaming=True,
+        model_kwargs={"stream_options": {"include_usage": True}},
     )
     trimmed = get_trimmer_object(token_counter_model=model_chat).invoke(messages)
 
