@@ -198,7 +198,7 @@ async def chat_node(state: ConversationState):
             break
 
     with get_openai_callback() as cb:
-        response: AIMessage = await model_chat.ainvoke(msgs, callbacks=[cb])
+        response: AIMessage = await model_chat.ainvoke(msgs)
         token_info = update_token_tracking(
             state=state,
             response=response,

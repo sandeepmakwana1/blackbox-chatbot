@@ -162,7 +162,6 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
             model_chat.ainvoke,
             msgs,
             context="Deep research planning",
-            callbacks=[cb],
         )
         source_id = (state.get("user_id") or "").split("_")[-1]
         token_info = update_token_tracking(
@@ -251,7 +250,6 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
             llm.ainvoke,
             messages,
             context="Research plan generation",
-            callbacks=[cb],
         )
         token_info = update_token_tracking(
             state=state,
