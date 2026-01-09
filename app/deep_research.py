@@ -28,8 +28,12 @@ from app.helper import (
     handle_openai_error,
     serialize_content_to_string,
 )
-from app.prompt import PlaygroundResearchPlainPrompt, DeepResearchPromptGenreatorPrompt
+from app.prompt import (
+    PlaygroundResearchPlainPrompt,
+    DeepResearchPromptGenreatorPrompt,
+)
 from app.store import add_record, delete_record
+from app.constants import ContextType
 
 __all__ = [
     "deepresearch_plaining_node",
@@ -163,12 +167,15 @@ async def deepresearch_plaining_node(state: ConversationState) -> Dict:
     ):
         return {"messages": [response], "tokens": state.get("tokens", {})}
 
-    # Update token tracking
+    source_id = (state.get("user_id") or "").split("_")[-1]
     token_info = update_token_tracking(
         state=state,
         response=response,
         model_name=DEFAULT_MODELS["research_plain"],
         additional_tokens=0,
+        stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PLAN,
+        source_id=source_id,
+        request_id=state.get("thread_id") or state.get("user_id"),
     )
 
     return {
@@ -221,18 +228,11 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         ]
     )
 
-    print(has_contexts, "================> has_contexts in deepresearch_plaining_node")
-
     conversation_context = _build_conversation_context(state)
     rfp_context = ""
     if has_contexts:
         source_id = (state.get("user_id") or "").split("_")[-1]
         rfp_context = get_context_data(source_id, "rfp_text")
-    # print(rfp_context, '================> rfp_context in deepresearch_plaining_node')
-    print(
-        conversation_context,
-        "================> conversation_context in deepresearch_plaining_node",
-    )
 
     messages = prompt.format_messages(
         query=query,
@@ -256,8 +256,18 @@ async def deep_research_prompt(state: ConversationState) -> Dict:
         }
 
     LOGGER.info(f"Generated enhanced research plan for query: {query[:100]}...")
+    token_info = update_token_tracking(
+        state=state,
+        response=response,
+        model_name=DEFAULT_MODELS["research_plain"],
+        additional_tokens=0,
+        stage_name=ContextType.PLAYGROUND_DEEP_RESEARCH_PROMPT,
+        source_id=source_id,
+        request_id=state.get("thread_id") or state.get("user_id"),
+    )
     return {
         "research_plan": response.content,
+        "tokens": token_info,
         # "messages": [AIMessage(content="Research plan generated. Proceeding with execution...")]
     }
 

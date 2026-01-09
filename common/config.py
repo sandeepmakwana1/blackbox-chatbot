@@ -31,8 +31,13 @@ S3_PATH_TEMPLATES: Dict[str, str] = {
     "rfp_text": "{source_id}/rfp_text.json",
     "prompt_data": "{source_id}/prompt_data.json",
     "validation_results": "{source_id}/stage/validation/validation_results.json",
+    "validation_legal": "{source_id}/stage/validation/validation_legal.json",
+    "validation_technical": "{source_id}/stage/validation/validation_technical.json",
+    "validation_checklist": "{source_id}/stage/validation/validation_checklist.json",
     "deep_research": "{source_id}/stage/deep_research/deep_research.json",
     "deep_research_queries": "{source_id}/stage/deep_research/deep_research_queries.json",
+    "deep_research_status": "{source_id}/stage/deep_research/deep_research_status.json",
+    "deep_research_prompts": "{source_id}/stage/deep_research/deep_research_prompts.json",
     "company_data": "{source_id}/stage/pre_steps/company_data.json",
     "user_summary": "{source_id}/stage/pre_steps/user_summary.json",
     "system_summary": "{source_id}/stage/pre_steps/system_summary.json",
@@ -47,6 +52,9 @@ S3_PATH_TEMPLATES: Dict[str, str] = {
     "cost_user_preference": "{source_id}/stage/costing/cost_user_preference.json",
     "content": "{source_id}/stage/content/content.json",
     "long_term_memory": "{source_id}/stage/content/long_term_memory.json",
+    "toc_version": "{source_id}/stage/pre_steps/toc_version.json",
+    "toc_enriched_version": "{source_id}/stage/pre_steps/toc_enriched_version.json",
+    "generated_questions": "{source_id}/generated_questions.json",
 }
 
 S3_KEY_PREFIX = "proposals/"

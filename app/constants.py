@@ -19,3 +19,6 @@ class ContextType:
     COST_LICENSE: str = "rfp_license"
     COST_HR: str = "hourly_wages"
     RFP_TEXT: str = "rfp_text"
+    PLAYGROUND_CHAT: str = "playground_chat"
+    PLAYGROUND_DEEP_RESEARCH_PLAN: str = "playground_deep_research_plan"
+    PLAYGROUND_DEEP_RESEARCH_PROMPT: str = "playground_deep_research_prompt"

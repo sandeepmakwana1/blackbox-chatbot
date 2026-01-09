@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Dict, List, Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import (
@@ -20,6 +21,7 @@ from app.helper import (
     get_context_data,
     get_trimmer_object,
     update_token_tracking,
+    serialize_content_to_string,
 )
 from app.prompt import (
     PlaygroundChatPrompt,
@@ -121,10 +123,12 @@ async def chat_node(state: ConversationState):
                         file_urls.append(url)
 
         if file_urls:
-            image_blocks = [
+            image_blocks: List[Any] = [
                 {"type": "image_url", "image_url": {"url": url}} for url in file_urls
             ]
-            content_blocks = [{"type": "text", "text": "Attached images for context."}]
+            content_blocks: List[Any] = [
+                {"type": "text", "text": "Attached images for context."}
+            ]
             content_blocks.extend(image_blocks)
             prompt_template = ChatPromptTemplate.from_messages(
                 [system_prompt, user_prompt, HumanMessage(content=content_blocks)]
@@ -185,10 +189,23 @@ async def chat_node(state: ConversationState):
 
     response: AIMessage = await model_chat.ainvoke(msgs)
 
+    # Capture latest user message content for usage logging
+    last_human = ""
+    for msg in reversed(messages):
+        if isinstance(msg, HumanMessage):
+            last_human = serialize_content_to_string(
+                getattr(msg, "content", msg)
+            ).strip()
+            break
+
     token_info = update_token_tracking(
         state=state,
         response=response,
         model_name=DEFAULT_MODELS["chat"],
         additional_tokens=0,
+        stage_name=ContextType.PLAYGROUND_CHAT,
+        source_id=source_id,
+        request_id=state.get("thread_id") or state.get("user_id"),
+        message_text=last_human,
     )
     return {"messages": [response], "summary_context": summary, "tokens": token_info}

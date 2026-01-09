@@ -1,0 +1,40 @@
+class ContextType:
+    VALIDATION_LEGAL: str = "validation_legal"
+    VALIDATION_TECHNICAL: str = "validation_technical"
+
+    VALIDATION_RESULTS: str = "validation_results"
+    VALIDATION_CHECKLIST: str = "validation_checklist"
+    VALIDATION_DATE_EXTRACTOR: str = "validation_date_extractor"
+    TABLE_OF_CONTENT: str = "table_of_content"
+    TABLE_OF_CONTENT_REGENERATE: str = "table_of_content_regenerate"
+    USER_PREFERENCE: str = "user_preference"
+    CONTENT: str = "content"
+    COST_INFRASTRUCTURE: str = "rfp_infrastructure"
+    COST_LICENSE: str = "rfp_license"
+    COST_HR: str = "hourly_wages"
+    COST_FIELD_NAME: str = "cost_field_name"
+    COST_SUMMARY: str = "cost_summary"
+    COST_USER_PREFERENCE: str = "cost_user_preference"
+    COST_IMAGE_EXTRACTOR: str = "cost_image_extractor"
+    COST_IMAGE_CALCULATION: str = "cost_image_calculation"
+    COST_EXCEL_FILLER: str = "cost_excel_filler"
+    # used
+    RFP_TEXT: str = "rfp_text"
+    DEEP_RESEARCH_QUERIES: str = "deep_research_queries"
+    DEEP_RESEARCH_STATUS: str = "deep_research_status"
+    DEEP_RESEARCH_PROMPTS: str = "deep_research_prompts"
+    DEEP_RESEARCH: str = "deep_research"
+
+    # draft
+    LONG_TERM_MEMORY: str = "long_term_memory"
+
+    # Pre-Steps
+    COMPANY_DATA: str = "company_data"
+    SYSTEM_SUMMARY: str = "system_summary"
+    USER_SUMMARY: str = "user_summary"
+    TOC_VERSION: str = "toc_version"
+    TOC_ENRICHED_VERSION: str = "toc_enriched_version"
+    AGENCY_REFERENCES: str = "agency_references"
+    EXEC_SUMMARY_SECTION_NUMBER: str = "exec_summary_section_number"
+    GENERATED_QUESTIONS: str = "generated_questions"
+    GENERATED_QUESTIONS_REGENERATE: str = "generated_questions_regenerate"

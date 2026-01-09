@@ -4,6 +4,7 @@ load_dotenv()
 
 import logging
 import os
+import time
 from datetime import datetime
 from functools import lru_cache
 from typing import Any, Dict, Optional, Tuple
@@ -15,9 +16,8 @@ from openai import APIConnectionError, APITimeoutError, OpenAIError, RateLimitEr
 from app.config import DEFAULT_MODELS, MAX_TOKENS_FOR_TRIM
 from app.schema import ConversationState
 from app.constants import ContextType
-from common.datastore import (
-    S3StoreService,
-)
+from common.datastore import S3StoreService
+from common.usage import calculate_and_store_playground_usage
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger("langgraph-playground")
@@ -66,6 +66,11 @@ def update_token_tracking(
     response: AIMessage,
     model_name: str,
     additional_tokens: int = 0,
+    *,
+    stage_name: str = "playground_chat",
+    source_id: Optional[str] = None,
+    request_id: Optional[str] = None,
+    message_text: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Track token usage across the conversation with consistent error handling."""
     prior = state.get("tokens")
@@ -127,6 +132,37 @@ def update_token_tracking(
     LOGGER.info(
         f"Token tracking: {total_request_tokens} tokens this request (input: {input_tokens}, output: {output_tokens}, additional: {additional_tokens}), {new_total_tokens} total"
     )
+
+    # Emit usage to shared logger when identifiers are available
+    if source_id:
+
+        class _UsageAdapter:
+            def __init__(self, prompt_tokens: int, completion_tokens: int):
+                self.prompt_tokens = prompt_tokens
+                self.completion_tokens = completion_tokens
+                self.prompt_tokens_details = {"cached_tokens": 0}
+                self.completion_tokens_details = {"reasoning_tokens": 0}
+                self.message = message_text
+
+        try:
+            adapter = _UsageAdapter(input_tokens, output_tokens)
+            unique_request = (
+                request_id
+                or state.get("thread_id")
+                or state.get("user_id")
+                or f"msg-{int(time.time() * 1000)}"
+            )
+            calculate_and_store_playground_usage(
+                LOGGER,
+                adapter,
+                source_id,
+                stage_name,
+                unique_request,
+                message_text=message_text,
+            )
+        except Exception as e:  # noqa: BLE001
+            LOGGER.warning("Failed to log usage for playground: %s", e)
+
     return token_info
 
 

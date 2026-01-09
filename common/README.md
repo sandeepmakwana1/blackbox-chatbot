@@ -7,7 +7,6 @@ This package provides common utilities for AWS Lambda functions, designed to be 
 - **Logging**: Structured logging with request ID tracking
 - **Parameters**: Utilities for retrieving parameters from SSM Parameter Store
 - **Database**: PostgreSQL connection management
-- **Redis**: Redis connection and service utilities
 - **Decorators**: Utility decorators like execution time measurement
 
 ## Usage
@@ -19,7 +18,6 @@ This package provides common utilities for AWS Lambda functions, designed to be 
 from common.logging import get_custom_logger, set_request_id
 from common.parameters import get_parameter
 from common.database import get_connection
-from common.redis import RedisService
 from common.decorators import measure_execution_time
 
 # Or import everything
@@ -59,14 +57,6 @@ def query_data():
     result = cursor.fetchall()
     cursor.close()
     return result
-```
-
-### 5. Use Redis
-
-```python
-def cache_data(key, value):
-    pk = common.RedisService.create(key, value)
-    return pk
 ```
 
 ## Deployment
